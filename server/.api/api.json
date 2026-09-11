@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/api@7/schema.json",
+  "apis": [
+    {
+      "private": true,
+      "identifier": "vrio-api",
+      "source": "@vrio-api/v1.0#b85t6g5mshox1o3",
+      "integrity": "sha512-4t6SGzAu8hhxeCr5IcDAp6cWUdgYoWMDjXeGQrpcbKldMEdAG0+OR/22r2QbQA0TY/N5YchqtWEBA1yaVdKruA==",
+      "installerVersion": "7.0.2",
+      "language": "js",
+      "createdAt": "2026-08-21T08:53:05.282Z"
+    }
+  ]
+}

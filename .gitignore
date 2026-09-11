@@ -1,0 +1,43 @@
+# Node dependencies
+node_modules/
+**/node_modules/
+
+# Environment variables & secrets
+.env
+**/.env
+**/.env.*
+!**/.env.example
+pass.txt
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Build outputs
+dist/
+**/dist/
+build/
+**/build/
+dist-ssr/
+
+# Backup and scratch files
+*.bak
+scratch/
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Editor configurations
+.vscode/
+.idea/
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+server/src/uploads/*
+!server/src/uploads/.gitkeep
