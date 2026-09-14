@@ -27,6 +27,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import api from "@/api/axios";
 import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import * as pdfjsLib from "pdfjs-dist";
 
 // Configure PDF.js worker
@@ -186,90 +187,134 @@ async function extractPdfText(file) {
   return fullText.trim();
 }
 
-// ---- Helper: Download chat as PDF ----
-function downloadChatAsPdf(messages, fileName = "lab-report-analysis.pdf") {
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const pageW = doc.internal.pageSize.getWidth();
-  const margin = 40;
-  const contentW = pageW - margin * 2;
-  let y = margin;
+// ---- Helper: Download chat visually as high-resolution PDF snapshot ----
+async function downloadElementAsPdf(element, fileName = "lab-report-analysis.pdf", options = {}) {
+  if (!element) return;
 
-  // Title
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(88, 28, 135); // purple-800
-  doc.text("TeleClinic AI — Lab Report Analysis", margin, y);
-  y += 10;
+  // Create clean printable clone container
+  const printContainer = document.createElement("div");
+  printContainer.style.position = "fixed";
+  printContainer.style.top = "-99999px";
+  printContainer.style.left = "-99999px";
+  printContainer.style.width = "780px";
+  printContainer.style.backgroundColor = "#ffffff";
+  printContainer.style.padding = "32px";
+  printContainer.style.fontFamily = "Inter, system-ui, -apple-system, sans-serif";
+  printContainer.style.zIndex = "-9999";
 
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 116, 139); // slate-500
-  doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y + 10);
-  y += 28;
+  // Header branding
+  const headerHtml = `
+    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #f1f5f9; padding-bottom: 16px; margin-bottom: 24px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 36px; height: 36px; border-radius: 10px; background: #0f172a; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 18px;">
+          🏥
+        </div>
+        <div>
+          <h1 style="font-size: 17px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2;">TeleClinic AI</h1>
+          <p style="font-size: 11px; font-weight: 600; color: #64748b; margin: 0;">${options.subtitle || "AI Health & Clinical Lab Analysis"}</p>
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; padding: 4px 10px; border-radius: 9999px; margin-bottom: 4px;">
+          ${options.reportName || "Clinical Report"}
+        </span>
+        <p style="font-size: 10px; color: #94a3b8; margin: 0;">Generated: ${new Date().toLocaleString()}</p>
+      </div>
+    </div>
+  `;
 
-  doc.setDrawColor(200, 200, 220);
-  doc.line(margin, y, pageW - margin, y);
-  y += 16;
+  // Clone content
+  const clonedContent = element.cloneNode(true);
+  clonedContent.style.maxHeight = "none";
+  clonedContent.style.height = "auto";
+  clonedContent.style.overflow = "visible";
+  clonedContent.style.backgroundColor = "transparent";
 
-  const addPage = () => {
-    doc.addPage();
-    y = margin;
-  };
-
-  const checkPageBreak = (needed = 20) => {
-    if (y + needed > doc.internal.pageSize.getHeight() - margin) addPage();
-  };
-
-  const wrapAndWrite = (text, x, startY, maxW, lineHeight = 14) => {
-    const lines = doc.splitTextToSize(text, maxW);
-    lines.forEach((line) => {
-      checkPageBreak(lineHeight);
-      doc.text(line, x, y);
-      y += lineHeight;
-    });
-  };
-
-  messages.forEach((msg) => {
-    if (msg.sender === "system") return;
-
-    const isUser = msg.sender === "user";
-    const label = isUser ? "You" : "TeleClinic AI";
-    const labelColor = isUser ? [124, 58, 237] : [5, 150, 105]; // purple / emerald
-
-    checkPageBreak(24);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...labelColor);
-    doc.text(`${label}  ${msg.timestamp || ""}`, margin, y);
-    y += 14;
-
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(30, 41, 59); // slate-800
-    doc.setFontSize(9);
-    const cleanText = typeof msg.text === "string" ? msg.text : (msg.text?.reply || "");
-    wrapAndWrite(cleanText.replace(/[✅⚠️🔻•*#]/g, ""), margin, y, contentW);
-    y += 8;
-
-    doc.setDrawColor(226, 232, 240);
-    doc.line(margin, y, pageW - margin, y);
-    y += 12;
+  // Reset any internal scrollable containers
+  clonedContent.querySelectorAll("*").forEach((el) => {
+    if (el.classList?.contains("overflow-y-auto") || el.classList?.contains("overflow-x-auto")) {
+      el.style.overflow = "visible";
+      el.style.maxHeight = "none";
+    }
   });
 
-  // Footer
-  const totalPages = doc.internal.getNumberOfPages();
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p);
-    doc.setFontSize(8);
-    doc.setTextColor(148, 163, 184);
-    doc.text(
-      "This document is for informational purposes only. Not a substitute for professional medical advice.",
-      margin,
-      doc.internal.pageSize.getHeight() - 20
-    );
-    doc.text(`Page ${p} of ${totalPages}`, pageW - margin - 40, doc.internal.pageSize.getHeight() - 20);
-  }
+  // Remove small interactive buttons from clone (copy button, suggestion pills)
+  clonedContent.querySelectorAll("button").forEach((btn) => {
+    if (
+      btn.title === "Copy response" ||
+      btn.getAttribute("title")?.includes("Copy") ||
+      btn.textContent?.includes("Copy") ||
+      btn.textContent?.includes("Copied")
+    ) {
+      btn.remove();
+    }
+  });
 
-  doc.save(fileName);
+  printContainer.innerHTML = headerHtml;
+  printContainer.appendChild(clonedContent);
+
+  // Footer disclaimer
+  const footerHtml = document.createElement("div");
+  footerHtml.style.marginTop = "28px";
+  footerHtml.style.paddingTop = "16px";
+  footerHtml.style.borderTop = "1px solid #f1f5f9";
+  footerHtml.style.fontSize = "10px";
+  footerHtml.style.color = "#94a3b8";
+  footerHtml.style.display = "flex";
+  footerHtml.style.justifyContent = "space-between";
+  footerHtml.innerHTML = `
+    <span>⚠️ TeleClinic AI educational insights are for reference only. Not a formal diagnosis.</span>
+    <span>teleclinic.health</span>
+  `;
+  printContainer.appendChild(footerHtml);
+
+  document.body.appendChild(printContainer);
+
+  try {
+    const canvas = await html2canvas(printContainer, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: "#ffffff",
+      windowWidth: 780,
+    });
+
+    const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
+    const pdfWidth = doc.internal.pageSize.getWidth();
+    const pdfHeight = doc.internal.pageSize.getHeight();
+
+    const pageHeightPx = Math.floor((canvas.width * pdfHeight) / pdfWidth);
+    let renderedHeight = 0;
+
+    while (renderedHeight < canvas.height) {
+      const currentSliceHeight = Math.min(pageHeightPx, canvas.height - renderedHeight);
+
+      const pageCanvas = document.createElement("canvas");
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = currentSliceHeight;
+      const ctx = pageCanvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+      ctx.drawImage(
+        canvas,
+        0, renderedHeight, canvas.width, currentSliceHeight,
+        0, 0, canvas.width, currentSliceHeight
+      );
+
+      const pageImgData = pageCanvas.toDataURL("image/jpeg", 0.95);
+      const slicePdfHeight = (currentSliceHeight * pdfWidth) / canvas.width;
+
+      if (renderedHeight > 0) {
+        doc.addPage();
+      }
+      doc.addImage(pageImgData, "JPEG", 0, 0, pdfWidth, slicePdfHeight);
+      renderedHeight += currentSliceHeight;
+    }
+
+    doc.save(fileName);
+  } finally {
+    document.body.removeChild(printContainer);
+  }
 }
 
 export default function AIAssistant() {
@@ -287,6 +332,8 @@ export default function AIAssistant() {
   const [chatLoading, setChatLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState(null);
   const chatEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // ---------------- Lab Report State ----------------
   const [labMessages, setLabMessages] = useState([]);
@@ -296,6 +343,7 @@ export default function AIAssistant() {
   const [pdfParseLoading, setPdfParseLoading] = useState(false);
   const [labCopiedIndex, setLabCopiedIndex] = useState(null);
   const labEndRef = useRef(null);
+  const labContainerRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const quickPrompts = [
@@ -515,14 +563,53 @@ export default function AIAssistant() {
     toast.success("Lab session cleared.");
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     if (labMessages.length === 0) {
       toast.error("No analysis to download yet.");
       return;
     }
-    const safeName = labFile?.name?.replace(/\.pdf$/i, "") || "lab-report";
-    downloadChatAsPdf(labMessages, `${safeName}-analysis.pdf`);
-    toast.success("PDF downloaded!");
+    if (!labContainerRef.current) {
+      toast.error("Could not find chat content to capture.");
+      return;
+    }
+    setDownloadingPdf(true);
+    try {
+      const safeName = labFile?.name?.replace(/\.pdf$/i, "") || "lab-report";
+      await downloadElementAsPdf(labContainerRef.current, `${safeName}-analysis.pdf`, {
+        subtitle: "AI Clinical Lab Report Analysis",
+        reportName: labFile?.name || "Lab Report",
+      });
+      toast.success("Visual PDF downloaded successfully!");
+    } catch (err) {
+      console.error("PDF export error:", err);
+      toast.error("Failed to generate PDF. Please try again.");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadHealthChatPdf = async () => {
+    if (chatMessages.length <= 1) {
+      toast.error("No conversation to download yet.");
+      return;
+    }
+    if (!chatContainerRef.current) {
+      toast.error("Could not find chat content to capture.");
+      return;
+    }
+    setDownloadingPdf(true);
+    try {
+      await downloadElementAsPdf(chatContainerRef.current, "health-advisor-consultation.pdf", {
+        subtitle: "AI Health & Wellness Clinical Consultation",
+        reportName: "Consultation Chat",
+      });
+      toast.success("Visual PDF downloaded successfully!");
+    } catch (err) {
+      console.error("PDF export error:", err);
+      toast.error("Failed to generate PDF. Please try again.");
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   return (
@@ -549,24 +636,52 @@ export default function AIAssistant() {
         {/* Tab Switcher */}
         <div className="flex items-center gap-2">
           {activeTab === "chat" && chatMessages.length > 1 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClearChat}
-              className="text-xs text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl h-9 px-3 gap-1.5 cursor-pointer border-slate-200"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Clear Chat
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={downloadingPdf}
+                onClick={handleDownloadHealthChatPdf}
+                className="text-xs text-slate-600 hover:text-purple-600 hover:bg-purple-50 rounded-xl h-9 px-3 gap-1.5 cursor-pointer border-slate-200"
+              >
+                {downloadingPdf ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" /> Generating...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" /> Download PDF
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearChat}
+                className="text-xs text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl h-9 px-3 gap-1.5 cursor-pointer border-slate-200"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Clear Chat
+              </Button>
+            </div>
           )}
           {activeTab === "lab" && labMessages.length > 0 && (
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
+                disabled={downloadingPdf}
                 onClick={handleDownloadPdf}
-                className="text-xs text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl h-9 px-3 gap-1.5 cursor-pointer border-slate-200"
+                className="text-xs text-slate-600 hover:text-teal-600 hover:bg-teal-50 rounded-xl h-9 px-3 gap-1.5 cursor-pointer border-slate-200"
               >
-                <Download className="w-3.5 h-3.5" /> Download PDF
+                {downloadingPdf ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-600" /> Generating...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" /> Download PDF
+                  </>
+                )}
               </Button>
               <Button
                 variant="outline"
@@ -625,7 +740,7 @@ export default function AIAssistant() {
 
           {/* Chat Window */}
           <Card className="border border-slate-200/80 shadow-xs rounded-3xl bg-white overflow-hidden flex flex-col h-[640px]">
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50/60">
+            <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50/60">
               {chatMessages.map((msg, index) => (
                 <div
                   key={index}
@@ -867,7 +982,7 @@ export default function AIAssistant() {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50/60">
+              <div ref={labContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50/60">
                 {labMessages.length === 0 && !labLoading && (
                   <div className="flex flex-col items-center justify-center h-full text-center space-y-3 py-12">
                     <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto">
