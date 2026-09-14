@@ -335,11 +335,10 @@ RESPONSE STRUCTURE for health topics:
 - Brief empathetic acknowledgment
 - Clear general information with markdown formatting (headings, bullets, bold key terms)
 - Practical general steps / lifestyle tips when applicable
-- When to seek medical attention (if warranted)
+- Recommended specialist: Clearly mention the most suitable doctor category to consult (e.g. **Recommended Specialist:** Cardiologist, Dermatologist, Neurologist, ENT Specialist, or General Physician)
 - End EVERY response about health topics with exactly this line: "⚠️ *This is general health information only, not a substitute for professional medical advice. Please consult a qualified healthcare provider for personal diagnosis and treatment.*"
 
 TONE: Warm, empathetic, and professional. Be concise — do not pad responses with unnecessary filler.`;
-
 
   // Format and cap conversation history to the last 8 turns, filtering out the welcome message
   const formattedHistory = (Array.isArray(history) ? history : [])
@@ -376,47 +375,90 @@ TONE: Warm, empathetic, and professional. Be concise — do not pad responses wi
   });
 
   if (groqContent && typeof groqContent === "string" && groqContent.trim().length > 0) {
-    // Only suggest a specialist when the AI actually recommends seeing a doctor
-    // Use word-boundary safe patterns to avoid false matches (e.g. "ent" inside "patient", "nutrients", "different")
+    const specKeywords = [
+      {
+        name: "Cardiologist",
+        patterns: [/\b(heart|cardio\w*|palpitation\w*|hypertension|blood pressure|cholesterol|chest (pain|tightness|pressure|discomfort)|arrhythmia)\b/i],
+      },
+      {
+        name: "Dermatologist",
+        patterns: [/\b(skin|rash\w*|acne|pimple\w*|eczema|psoriasis|itch\w*|hives|mole\w*|hair loss|dandruff|fungal|dermatitis)\b/i],
+      },
+      {
+        name: "Pediatrician",
+        patterns: [/\b(pediatric\w*|child\w*|baby|infant\w*|toddler\w*|kid\w*|newborn\w*)\b/i],
+      },
+      {
+        name: "Neurologist",
+        patterns: [/\b(neurolog\w*|headache\w*|migraine\w*|seizure\w*|dizziness|vertigo|concussion|memory loss|numbness|tingling|tremor\w*|epilepsy)\b/i],
+      },
+      {
+        name: "Orthopedic Surgeon",
+        patterns: [/\b(orthoped\w*|bone\w*|joint\w*|knee\w*|spine|back pain|shoulder|fracture\w*|sprain\w*|ligament\w*|arthritis|cartilage|muscle strain|posture)\b/i],
+      },
+      {
+        name: "ENT Specialist",
+        patterns: [/\b(ent|ear\w*|nose|throat|sinus\w*|tonsil\w*|hoarseness|hearing|tinnitus|earache|sore throat|nasal)\b/i],
+      },
+      {
+        name: "Psychiatrist",
+        patterns: [/\b(psychiat\w*|mental health|anxiety|depress\w*|panic\b|insomnia|bipolar|adhd|burnout|sleep disorder)\b/i],
+      },
+      {
+        name: "Gynecologist",
+        patterns: [/\b(gynecol\w*|women's health|pregnancy|pregnant|menstrua\w*|period\w*|ovary|ovarian|pcos|pelvic|fertility|vaginal?)\b/i],
+      },
+      {
+        name: "Ophthalmologist",
+        patterns: [/\b(ophthalmolog\w*|eye\w*|vision|cataract\w*|cornea\w*|conjunctivitis|pink eye|glaucoma|retina)\b/i],
+      },
+      {
+        name: "Gastroenterologist",
+        patterns: [/\b(gastro\w*|digest\w*|stomach|gut|gerd|acid reflux|heartburn|bloating|diarrhea|constipation|nausea|vomit\w*|ibs|abdominal pain|liver|ulcer\w*|bowel)\b/i],
+      },
+      {
+        name: "Endocrinologist",
+        patterns: [/\b(endocrinolog\w*|diabet\w*|blood sugar|thyroid|hypothyroid\w*|hyperthyroid\w*|hormon\w*|insulin|metabolism)\b/i],
+      },
+      {
+        name: "General Physician",
+        patterns: [/\b(general physician|primary care|family doctor|gp|fever|cold|flu|cough|fatigue|weakness|body ache\w*|infection\w*|checkup)\b/i],
+      },
+    ];
+
     let matchedSpec = null;
 
-    // Guard: only scan for specialties if the response suggests a doctor visit
-    const doctorReferralPhrases = [
-      "consult", "see a", "visit a", "speak with a", "doctor", "physician",
-      "specialist", "appointment", "recommend seeing", "seek medical", "medical attention",
-    ];
-    const hasDoctorReferral = doctorReferralPhrases.some((p) =>
-      groqContent.toLowerCase().includes(p)
-    );
+    // 1. Direct explicit statement in AI reply: e.g. 'Recommended Specialist: Neurologist'
+    const explicitMatch = groqContent.match(/(?:recommend(?:ed)?(?:\s+specialist)?|consult(?: a)?|see a|visit a)[\s:*]+(Cardiologist|Dermatologist|General Physician|Pediatrician|Neurologist|Orthopedic Surgeon|Gynecologist|Psychiatrist|ENT Specialist|Ophthalmologist|Gastroenterologist|Endocrinologist)/i);
+    if (explicitMatch) {
+      const found = specKeywords.find((s) => s.name.toLowerCase() === explicitMatch[1].toLowerCase());
+      if (found) matchedSpec = found.name;
+    }
 
-    if (hasDoctorReferral) {
-      const lowerContent = groqContent.toLowerCase();
-
-      // Use whole-word regex patterns to prevent substring false positives
-      const specKeywords = [
-        { name: "Cardiologist",       patterns: [/\bcardio\b/, /\bheart specialist\b/, /\bcardiologist\b/] },
-        { name: "Dermatologist",      patterns: [/\bdermato\w*\b/, /\bskin specialist\b/, /\bdermatologist\b/] },
-        { name: "Pediatrician",       patterns: [/\bpediatric\w*\b/, /\bchild specialist\b/, /\bpediatrician\b/] },
-        { name: "Neurologist",        patterns: [/\bneurolog\w*\b/, /\bbrain specialist\b/] },
-        { name: "Orthopedic",         patterns: [/\borthoped\w*\b/, /\bbone specialist\b/] },
-        { name: "ENT Specialist",     patterns: [/\bent specialist\b/, /\bear,? nose\b/, /\botolaryngol\w*\b/, /\bentor?\b/] },
-        { name: "Psychiatrist",       patterns: [/\bpsychiat\w*\b/, /\bmental health (professional|doctor|specialist)\b/, /\bpsychologist\b/] },
-        { name: "General Physician",  patterns: [/\bgeneral physician\b/, /\bprimary care\b/, /\binternist\b/, /\bgeneral medicine\b/, /\bfamily doctor\b/, /\bgp\b/] },
-        { name: "Gynecologist",       patterns: [/\bgynecol\w*\b/, /\bobgyn\b/, /\bwomen's health\b/] },
-        { name: "Urologist",          patterns: [/\burologis\w*\b/, /\burinary specialist\b/] },
-        { name: "Gastroenterologist", patterns: [/\bgastro\w*\b/, /\bgi (doctor|specialist)\b/, /\bdigestive specialist\b/] },
-        { name: "Pulmonologist",      patterns: [/\bpulmonolog\w*\b/, /\blung specialist\b/, /\brespiratory specialist\b/] },
-        { name: "Endocrinologist",    patterns: [/\bendocrinolog\w*\b/, /\bdiabetes specialist\b/, /\bthyroid specialist\b/, /\bhormone specialist\b/] },
-        { name: "Rheumatologist",     patterns: [/\brheumatolog\w*\b/, /\barthritis specialist\b/] },
-        { name: "Ophthalmologist",    patterns: [/\bophthalmolog\w*\b/, /\beye specialist\b/, /\beye doctor\b/] },
-      ];
-
+    // 2. High-relevance matching on patient's specific symptoms
+    if (!matchedSpec) {
       for (const s of specKeywords) {
-        if (s.patterns.some((r) => r.test(lowerContent))) {
+        if (s.patterns.some((p) => p.test(userQuery))) {
           matchedSpec = s.name;
           break;
         }
       }
+    }
+
+    // 3. Mentions of specific specialist titles in AI text
+    if (!matchedSpec) {
+      for (const s of specKeywords) {
+        const titleRegex = new RegExp(`\\b${s.name.replace(" ", "\\s+")}\\b`, "i");
+        if (titleRegex.test(groqContent)) {
+          matchedSpec = s.name;
+          break;
+        }
+      }
+    }
+
+    // 4. Default fallback to General Physician
+    if (!matchedSpec) {
+      matchedSpec = "General Physician";
     }
 
     return {
@@ -425,10 +467,10 @@ TONE: Warm, empathetic, and professional. Be concise — do not pad responses wi
     };
   }
 
-  // Fallback if Groq completely unreachable or key not configured
+  // Fallback if AI completely unreachable or key not configured
   return {
     reply: `I'm TeleClinic AI, your health & wellness assistant.\n\nI'm currently unable to process your request. Please try again in a moment.\n\nFor urgent medical concerns, please contact your healthcare provider or book a TeleClinic video consultation with a certified doctor anytime.`,
-    suggestedSpecialization: null,
+    suggestedSpecialization: "General Physician",
   };
 };
 
