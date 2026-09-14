@@ -27,7 +27,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import api from "@/api/axios";
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import { toCanvas } from "html-to-image";
 import * as pdfjsLib from "pdfjs-dist";
 
 // Configure PDF.js worker
@@ -194,8 +194,8 @@ async function downloadElementAsPdf(element, fileName = "lab-report-analysis.pdf
   // Create clean printable clone container
   const printContainer = document.createElement("div");
   printContainer.style.position = "fixed";
-  printContainer.style.top = "-99999px";
-  printContainer.style.left = "-99999px";
+  printContainer.style.left = "-9999px";
+  printContainer.style.top = "0px";
   printContainer.style.width = "780px";
   printContainer.style.backgroundColor = "#ffffff";
   printContainer.style.padding = "32px";
@@ -271,12 +271,10 @@ async function downloadElementAsPdf(element, fileName = "lab-report-analysis.pdf
   document.body.appendChild(printContainer);
 
   try {
-    const canvas = await html2canvas(printContainer, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
+    const canvas = await toCanvas(printContainer, {
+      pixelRatio: 2,
       backgroundColor: "#ffffff",
-      windowWidth: 780,
+      cacheBust: true,
     });
 
     const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
