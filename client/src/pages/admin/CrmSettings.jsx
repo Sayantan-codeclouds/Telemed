@@ -535,7 +535,7 @@ export default function AdminCrmSettings() {
             </div>
             <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
               {[
-                { key: "isEnabled",  title: "Enable Vrio CRM Gateway", desc: "Route pharmacy orders to Vrio CRM on checkout.", ac: "border-indigo-600 bg-indigo-50/20", ic: "text-indigo-600" },
+                { key: "isEnabled",  title: "Enable CRM Gateway",      desc: "Route pharmacy orders & consultations to active CRM on checkout.", ac: "border-indigo-600 bg-indigo-50/20", ic: "text-indigo-600" },
                 { key: "isTestMode", title: "Sandbox / Test Mode",     desc: "Simulate transactions without charging live cards.", ac: "border-amber-500 bg-amber-50/20", ic: "text-amber-500" },
               ].map((item) => (
                 <div key={item.key} onClick={() => handleToggle(item.key)}
