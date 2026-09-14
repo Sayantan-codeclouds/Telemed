@@ -58,6 +58,11 @@ app.use(
 );
 
 app.use(
+  "/api",
+  payoutRoutes
+);
+
+app.use(
   "/api/doctors",
   doctorRoutes
 );
@@ -130,11 +135,6 @@ app.use(
 app.use(
   "/api/lab-reports",
   labReportRoutes
-);
-
-app.use(
-  "/api",
-  payoutRoutes
 );
 
 /** 
