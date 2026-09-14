@@ -183,7 +183,7 @@ function AIDemo() {
             <p className="text-xs font-bold text-white">TeleClinic AI Receptionist</p>
             <p className="text-[10px] text-emerald-400 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
-              Online · Powered by Groq LLM
+              Online · Powered by TeleClinic AI
             </p>
           </div>
           <Mic className="w-4 h-4 text-white/30" />
@@ -336,7 +336,7 @@ const portals = [
 ═══════════════════════════════════════════════ */
 const HOW_STEPS = [
   { n: "01", icon: MessageSquare, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20", title: "Describe Symptoms", desc: "Chat with the AI receptionist — describe what you're feeling in plain language." },
-  { n: "02", icon: Bot, color: "text-violet-400", bg: "bg-violet-500/10 border-violet-500/20", title: "AI Triage & Matching", desc: "Groq LLM assesses urgency and instantly matches you with the right specialist." },
+  { n: "02", icon: Bot, color: "text-violet-400", bg: "bg-violet-500/10 border-violet-500/20", title: "AI Triage & Matching", desc: "Clinical AI assesses urgency and instantly matches you with the right specialist." },
   { n: "03", icon: Video, color: "text-cyan-400", bg: "bg-cyan-500/10 border-cyan-500/20", title: "Video Consultation", desc: "Join an encrypted WebRTC session with your matched doctor — from anywhere." },
   { n: "04", icon: Pill, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20", title: "Prescription & Pharmacy", desc: "Receive your digital prescription and order medications directly from the platform." },
 ];
@@ -619,7 +619,7 @@ export default function Home() {
                 <span className="text-white/30">zero wait time.</span>
               </h2>
               <p className="text-white/50 text-lg leading-relaxed">
-                Our Groq LLM-powered AI receptionist listens to your symptoms, asks the right follow-up questions, assesses urgency, and instantly matches you with the most suitable specialist — all before you even speak to a doctor.
+                Our intelligent AI receptionist listens to your symptoms, asks the right follow-up questions, assesses urgency, and instantly matches you with the most suitable specialist — all before you even speak to a doctor.
               </p>
 
               <ul className="space-y-3">

@@ -279,7 +279,7 @@ export default function AIAssistant() {
   const [chatMessages, setChatMessages] = useState([
     {
       sender: "ai",
-      text: "Hello! I am your **TeleClinic AI Health & Wellness Assistant** powered by Groq LLM.\n\nAsk me anything about symptoms, home care remedies, diet and nutrition, medications, exercise, sleep habits, or when to consult a specialist doctor.",
+      text: "Hello! I am your **TeleClinic AI Health & Wellness Assistant**.\n\nAsk me anything about symptoms, home care remedies, diet and nutrition, medications, exercise, sleep habits, or when to consult a specialist doctor.",
       timestamp: "Just now",
     },
   ]);
@@ -537,7 +537,7 @@ export default function AIAssistant() {
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-gray-900">AI Health Assistant</h1>
               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                ● Live Groq LLM
+                ● Live Clinical AI
               </span>
             </div>
             <p className="text-gray-500 text-xs mt-0.5">
@@ -713,7 +713,7 @@ export default function AIAssistant() {
                   </div>
                   <div className="p-4 bg-white rounded-3xl rounded-tl-none border border-slate-200/80 shadow-xs flex items-center gap-3">
                     <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
-                    <p className="text-xs text-slate-600 font-semibold">Consulting Groq AI & medical knowledge base...</p>
+                    <p className="text-xs text-slate-600 font-semibold">Consulting clinical AI & medical knowledge base...</p>
                   </div>
                 </div>
               )}
@@ -919,7 +919,7 @@ export default function AIAssistant() {
                     </div>
                     <div className="p-4 bg-white rounded-3xl rounded-tl-none border border-slate-200/80 shadow-xs flex items-center gap-3">
                       <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
-                      <p className="text-xs text-slate-600 font-semibold">Analyzing lab values with Groq AI...</p>
+                      <p className="text-xs text-slate-600 font-semibold">Analyzing lab values with clinical AI...</p>
                     </div>
                   </div>
                 )}
