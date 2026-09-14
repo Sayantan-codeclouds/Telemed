@@ -193,14 +193,15 @@ async function downloadElementAsPdf(element, fileName = "lab-report-analysis.pdf
 
   // Create clean printable clone container
   const printContainer = document.createElement("div");
-  printContainer.style.position = "fixed";
-  printContainer.style.left = "-9999px";
+  printContainer.style.position = "absolute";
   printContainer.style.top = "0px";
+  printContainer.style.left = "0px";
   printContainer.style.width = "780px";
   printContainer.style.backgroundColor = "#ffffff";
   printContainer.style.padding = "32px";
   printContainer.style.fontFamily = "Inter, system-ui, -apple-system, sans-serif";
-  printContainer.style.zIndex = "-9999";
+  printContainer.style.zIndex = "-99999";
+  printContainer.style.pointerEvents = "none";
 
   // Header branding
   const headerHtml = `
@@ -271,10 +272,23 @@ async function downloadElementAsPdf(element, fileName = "lab-report-analysis.pdf
   document.body.appendChild(printContainer);
 
   try {
+    const fullWidth = 780;
+    const fullHeight = Math.max(printContainer.scrollHeight, printContainer.offsetHeight, 100);
+
     const canvas = await toCanvas(printContainer, {
       pixelRatio: 2,
       backgroundColor: "#ffffff",
       cacheBust: true,
+      skipFonts: true,
+      width: fullWidth,
+      height: fullHeight,
+      style: {
+        position: "static",
+        top: "0",
+        left: "0",
+        margin: "0",
+        transform: "none",
+      },
     });
 
     const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
