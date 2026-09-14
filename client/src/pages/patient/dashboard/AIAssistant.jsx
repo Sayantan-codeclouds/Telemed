@@ -680,41 +680,54 @@ export default function AIAssistant() {
                             const spec = msg.suggestedSpecialization || (index > 0 ? "General Physician" : null);
                             if (spec) {
                               return (
-                                <div className="mt-3.5 p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50/70 to-blue-50 border border-purple-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 shadow-2xs">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                                      <Stethoscope className="w-5 h-5" />
-                                    </div>
-                                    <div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 bg-purple-100/90 px-2 py-0.5 rounded-full border border-purple-200">
-                                          Recommended Category
-                                        </span>
-                                        <span className="text-xs font-bold text-slate-900">{spec}</span>
+                                <div className="mt-4 p-4 rounded-2xl bg-gradient-to-br from-purple-50/90 via-indigo-50/40 to-white border border-purple-200/90 shadow-2xs space-y-3">
+                                  {/* Top Header Row: Icon + Category Info & Action Button */}
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                        <Stethoscope className="w-5 h-5" />
                                       </div>
-                                      <p className="text-xs text-slate-600 mt-0.5">
-                                        Consult a certified <strong>{spec}</strong> via encrypted video call for clinical diagnosis &amp; prescriptions.
-                                      </p>
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-700 bg-purple-100/90 px-2 py-0.5 rounded-md border border-purple-200 whitespace-nowrap">
+                                            Recommended Specialist
+                                          </span>
+                                        </div>
+                                        <h4 className="text-sm font-bold text-slate-900 mt-0.5">
+                                          {spec}
+                                        </h4>
+                                      </div>
                                     </div>
+
+                                    <Link to={`/patient/doctors?specialization=${encodeURIComponent(spec)}`} className="w-full sm:w-auto shrink-0">
+                                      <Button
+                                        size="sm"
+                                        className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs h-9 px-4 font-bold shadow-xs hover:shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
+                                      >
+                                        Book Consultation <ArrowRight className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </Link>
                                   </div>
-                                  <Link to={`/patient/doctors?specialization=${encodeURIComponent(spec)}`} className="w-full sm:w-auto shrink-0">
-                                    <Button size="sm" className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs h-10 px-4 font-bold shadow-xs cursor-pointer flex items-center justify-center gap-1.5">
-                                      Find {spec} Doctors <ArrowRight className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </Link>
+
+                                  {/* Descriptive subtitle with breathing room */}
+                                  <p className="text-xs text-slate-600 leading-relaxed border-t border-purple-100/80 pt-2.5">
+                                    Connect with certified <strong>{spec}s</strong> on TeleClinic via encrypted video for clinical diagnosis, guidance, and digital prescriptions.
+                                  </p>
                                 </div>
                               );
                             }
                             if (index === 0) {
                               return (
-                                <div className="mt-3 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3">
-                                  <div className="flex items-center gap-2 text-xs text-slate-600">
-                                    <Stethoscope className="w-4 h-4 text-purple-600 shrink-0" />
+                                <div className="mt-3.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                  <div className="flex items-center gap-2.5 text-xs text-slate-600">
+                                    <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                                      <Stethoscope className="w-3.5 h-3.5" />
+                                    </div>
                                     <span>Looking to speak with a physician right away?</span>
                                   </div>
-                                  <Link to="/patient/doctors">
-                                    <Button size="sm" variant="outline" className="text-purple-700 border-purple-200 hover:bg-purple-50 rounded-xl text-xs h-8 px-3 font-semibold shrink-0 cursor-pointer">
-                                      Browse All Doctors <ArrowRight className="w-3 h-3 ml-1" />
+                                  <Link to="/patient/doctors" className="w-full sm:w-auto shrink-0">
+                                    <Button size="sm" variant="outline" className="w-full sm:w-auto text-purple-700 border-purple-200 hover:bg-purple-50 rounded-xl text-xs h-8 px-3 font-semibold shrink-0 cursor-pointer flex items-center justify-center gap-1">
+                                      Browse All Doctors <ArrowRight className="w-3 h-3" />
                                     </Button>
                                   </Link>
                                 </div>
@@ -910,23 +923,35 @@ export default function AIAssistant() {
                               content={typeof msg.text === "string" ? msg.text : msg.text?.reply || JSON.stringify(msg.text)}
                             />
                             {/* Doctor Review Recommendation Card */}
-                            <div className="mt-3 p-3.5 rounded-2xl bg-gradient-to-r from-teal-50 via-cyan-50/70 to-blue-50 border border-teal-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                                  <Stethoscope className="w-4 h-4" />
+                            <div className="mt-4 p-4 rounded-2xl bg-gradient-to-br from-teal-50/90 via-cyan-50/40 to-white border border-teal-200/90 shadow-2xs space-y-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                    <Stethoscope className="w-5 h-5" />
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-teal-700 bg-teal-100/90 px-2 py-0.5 rounded-md border border-teal-200 whitespace-nowrap">
+                                      Clinical Review
+                                    </span>
+                                    <h4 className="text-sm font-bold text-slate-900 mt-0.5">
+                                      Consult a General Physician
+                                    </h4>
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className="text-xs font-bold text-teal-950">Review findings with a clinician</p>
-                                  <p className="text-[11px] text-teal-800">
-                                    Discuss abnormal lab indicators &amp; next steps with a certified specialist.
-                                  </p>
-                                </div>
+
+                                <Link to="/patient/doctors?specialization=General%20Physician" className="w-full sm:w-auto shrink-0">
+                                  <Button
+                                    size="sm"
+                                    className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs h-9 px-4 font-bold shadow-xs hover:shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
+                                  >
+                                    Book Consultation <ArrowRight className="w-3.5 h-3.5" />
+                                  </Button>
+                                </Link>
                               </div>
-                              <Link to="/patient/doctors?specialization=General%20Physician" className="w-full sm:w-auto shrink-0">
-                                <Button size="sm" className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs h-9 px-3.5 font-bold shadow-xs cursor-pointer flex items-center justify-center gap-1.5">
-                                  Consult a Doctor <ArrowRight className="w-3.5 h-3.5" />
-                                </Button>
-                              </Link>
+
+                              <p className="text-xs text-slate-600 leading-relaxed border-t border-teal-100/80 pt-2.5">
+                                Discuss your lab indicators, abnormal ranges, and potential next steps with a board-certified physician.
+                              </p>
                             </div>
                             <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
                               <span>Educational Analysis • Not a medical diagnosis</span>
