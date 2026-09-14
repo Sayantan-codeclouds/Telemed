@@ -27,7 +27,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import api from "@/api/axios";
 import jsPDF from "jspdf";
-import { toCanvas } from "html-to-image";
+import html2canvas from "html2canvas-pro";
 import * as pdfjsLib from "pdfjs-dist";
 
 // Configure PDF.js worker
@@ -193,7 +193,8 @@ async function downloadElementAsPdf(element, fileName = "lab-report-analysis.pdf
 
   // Create clean printable clone container
   const printContainer = document.createElement("div");
-  printContainer.style.position = "absolute";
+  printContainer.setAttribute("data-pdf-container", "true");
+  printContainer.style.position = "fixed";
   printContainer.style.top = "0px";
   printContainer.style.left = "0px";
   printContainer.style.width = "780px";
@@ -231,8 +232,12 @@ async function downloadElementAsPdf(element, fileName = "lab-report-analysis.pdf
   clonedContent.style.overflow = "visible";
   clonedContent.style.backgroundColor = "transparent";
 
-  // Reset any internal scrollable containers
+  // Reset any internal scrollable containers and strip CSS animations that could cause opacity: 0
   clonedContent.querySelectorAll("*").forEach((el) => {
+    el.classList?.remove?.("animate-in", "fade-in", "duration-200");
+    el.style.animation = "none";
+    el.style.transition = "none";
+    el.style.opacity = "1";
     if (el.classList?.contains("overflow-y-auto") || el.classList?.contains("overflow-x-auto")) {
       el.style.overflow = "visible";
       el.style.maxHeight = "none";
@@ -272,24 +277,33 @@ async function downloadElementAsPdf(element, fileName = "lab-report-analysis.pdf
   document.body.appendChild(printContainer);
 
   try {
-    const fullWidth = 780;
     const fullHeight = Math.max(printContainer.scrollHeight, printContainer.offsetHeight, 100);
 
-    const canvas = await toCanvas(printContainer, {
-      pixelRatio: 2,
+    const canvas = await html2canvas(printContainer, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
       backgroundColor: "#ffffff",
-      cacheBust: true,
-      skipFonts: true,
-      width: fullWidth,
+      windowWidth: 780,
+      width: 780,
       height: fullHeight,
-      style: {
-        position: "static",
-        top: "0",
-        left: "0",
-        margin: "0",
-        transform: "none",
+      x: 0,
+      y: 0,
+      scrollX: 0,
+      scrollY: 0,
+      onclone: (clonedDoc) => {
+        const target = clonedDoc.querySelector('[data-pdf-container="true"]');
+        if (target) {
+          target.style.position = "static";
+          target.style.zIndex = "1";
+          target.style.pointerEvents = "auto";
+        }
       },
     });
+
+    if (!canvas || canvas.width === 0 || canvas.height === 0) {
+      throw new Error("Canvas snapshot returned empty dimensions.");
+    }
 
     const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
     const pdfWidth = doc.internal.pageSize.getWidth();
@@ -300,6 +314,7 @@ async function downloadElementAsPdf(element, fileName = "lab-report-analysis.pdf
 
     while (renderedHeight < canvas.height) {
       const currentSliceHeight = Math.min(pageHeightPx, canvas.height - renderedHeight);
+      if (currentSliceHeight <= 0) break;
 
       const pageCanvas = document.createElement("canvas");
       pageCanvas.width = canvas.width;

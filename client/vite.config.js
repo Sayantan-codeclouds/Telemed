@@ -11,6 +11,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      html2canvas: "html2canvas-pro",
     },
   },
 });
