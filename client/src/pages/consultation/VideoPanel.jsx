@@ -170,7 +170,7 @@ export default function VideoPanel({
             </div>
             <button
               type="button"
-              onClick={openCameraSettings}
+              onClick={onRetryCamera}
               className="shrink-0 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-xl transition cursor-pointer"
             >
               Retry
