@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   Plus,
   Trash2,
@@ -16,6 +17,7 @@ import {
   Download,
   ShieldCheck,
   FileBadge,
+  ShoppingBag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -344,17 +346,28 @@ export default function PrescriptionPanel({ appointmentId, isDoctor }) {
           </div>
         </div>
 
-        {/* Download PDF CTA */}
-        <Button
-          type="button"
-          onClick={() => {
-            downloadPrescriptionPdf(prescription);
-            toast.success("Official Prescription PDF downloaded!");
-          }}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl h-11 text-xs gap-2 shadow-sm cursor-pointer"
-        >
-          <Download className="w-4 h-4" /> Download Official Prescription (PDF)
-        </Button>
+        {/* Patient Action Buttons: PDF Download & Pharmacy Order */}
+        <div className="space-y-2.5 pt-1">
+          <Button
+            type="button"
+            onClick={() => {
+              downloadPrescriptionPdf(prescription);
+              toast.success("Official Prescription PDF downloaded!");
+            }}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl h-11 text-xs gap-2 shadow-sm cursor-pointer"
+          >
+            <Download className="w-4 h-4" /> Download Official Prescription (PDF)
+          </Button>
+
+          <Link to="/patient/pharmacy" className="block w-full">
+            <Button
+              type="button"
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl h-11 text-xs gap-2 shadow-sm shadow-emerald-500/20 cursor-pointer"
+            >
+              <ShoppingBag className="w-4 h-4" /> Order Prescribed Medicines at Pharmacy ➔
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }

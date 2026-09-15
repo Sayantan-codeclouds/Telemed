@@ -10,6 +10,29 @@ import { incrementCouponUsageService } from "../coupons/coupon.service.js";
 import { Order } from "../pharmacy/pharmacy.model.js";
 import { sendOrderInvoiceEmail } from "../mail/mail.service.js";
 
+/**
+ * Robust Day-of-Week extraction resilient against UTC vs local timezone offsets
+ */
+export function getDayOfWeek(dateInput) {
+  if (!dateInput) return "";
+  if (typeof dateInput === "string") {
+    const match = dateInput.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", {
+        weekday: "long",
+        timeZone: "UTC",
+      });
+    }
+  }
+  return new Date(dateInput).toLocaleDateString("en-US", {
+    weekday: "long",
+    timeZone: "UTC",
+  });
+}
+
 export const createAppointment = async (
   patientId,
   data
@@ -43,14 +66,10 @@ export const createAppointment = async (
   }
 
   // ==========================
-// Check Doctor Availability
-// ==========================
+  // Check Doctor Availability
+  // ==========================
 
-const appointmentDay = new Date(data.appointmentDate)
-  .toLocaleDateString("en-US", {
-    weekday: "long",
-    timeZone: "UTC",
-  });
+  const appointmentDay = getDayOfWeek(data.appointmentDate);
 
 const availability = doctor.availability.find(
   (item) => item.day === appointmentDay
@@ -574,10 +593,7 @@ export const reschedulePatientAppointment = async (
   }
 
   // Check Doctor Availability on new date
-  const appointmentDay = new Date(newDate).toLocaleDateString("en-US", {
-    weekday: "long",
-    timeZone: "UTC",
-  });
+  const appointmentDay = getDayOfWeek(newDate);
 
   const availability = doctor.availability.find(
     (item) => item.day === appointmentDay

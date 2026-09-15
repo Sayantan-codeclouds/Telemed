@@ -384,7 +384,7 @@ export default function DoctorAppointments() {
                           {appt.vrioOrderId && (
                             <span className="inline-flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200 text-[11px]">
                               <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                              Paid • Vrio #{appt.vrioOrderId}
+                              Paid • Order #{appt.vrioOrderId}
                             </span>
                           )}
                         </div>

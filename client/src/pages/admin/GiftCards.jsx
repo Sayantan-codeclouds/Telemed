@@ -56,11 +56,21 @@ export default function AdminGiftCards() {
     gift_card_notes: "",
   });
 
+  const [crmProvider, setCrmProvider] = useState("vrio");
+
   const fetchGiftCards = async () => {
     try {
       setLoading(true);
-      const res = await adminApi.get("/gift-cards");
-      setGiftCards(res.data?.data || []);
+      const [res, crmRes] = await Promise.allSettled([
+        adminApi.get("/gift-cards"),
+        adminApi.get("/admin/crm-settings"),
+      ]);
+      if (res.status === "fulfilled") {
+        setGiftCards(res.value.data?.data || []);
+      }
+      if (crmRes.status === "fulfilled") {
+        setCrmProvider(crmRes.value.data?.data?.crmProvider || "vrio");
+      }
     } catch (error) {
       console.error("Failed to load gift cards:", error);
       toast.error("Failed to load gift cards from Vrio CRM.");
@@ -223,12 +233,23 @@ export default function AdminGiftCards() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-100 text-amber-700 text-xs font-semibold mb-1">
-            <Gift className="w-3.5 h-3.5" /> Vrio CRM Digital Gift Cards
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-100 text-amber-700 text-xs font-semibold">
+              <Gift className="w-3.5 h-3.5" /> Digital Gift Cards & Vouchers
+            </div>
+            {crmProvider === "vrio" ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                ● Live Vrio CRM Sync
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200" title="Active order gateway is set to another provider; gift cards operate with Vrio / internal vouchers">
+                ● Primary Gateway: {crmProvider} (Vrio Vouchers)
+              </span>
+            )}
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Create & Manage Gift Cards</h1>
           <p className="text-gray-500 text-xs mt-0.5">
-            Create, edit, and delete gift cards synchronized directly with Vrio CRM API <code className="bg-slate-100 px-1 py-0.5 rounded text-amber-700 font-mono">/gift_cards</code>
+            Create, edit, and manage digital gift cards synchronized with Vrio CRM <code className="bg-slate-100 px-1 py-0.5 rounded text-amber-700 font-mono">/gift_cards</code> and checkout vouchers.
           </p>
         </div>
 

@@ -40,7 +40,7 @@ export default function AdminRescheduleModal({
     for (let i = 1; i <= 14; i++) {
       const d = new Date();
       d.setDate(today.getDate() + i);
-      const dateString = d.toISOString().split("T")[0];
+      const dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const weekday = d.toLocaleDateString("en-US", { weekday: "short" });
       const dayNum = d.getDate();
       const month = d.toLocaleDateString("en-US", { month: "short" });

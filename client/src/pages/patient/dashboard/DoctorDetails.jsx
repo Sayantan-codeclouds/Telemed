@@ -224,7 +224,7 @@ export default function DoctorDetails() {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
 
-      const dateString = d.toISOString().split("T")[0];
+      const dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const weekday = d.toLocaleDateString("en-US", { weekday: "short" });
       const fullWeekday = d.toLocaleDateString("en-US", { weekday: "long" });
       const dayNum = d.getDate();
@@ -375,7 +375,7 @@ export default function DoctorDetails() {
       setBookedAppointment(res.data?.data || { success: true });
       toast.success("Consultation booked and paid successfully!", {
         description: res.data?.data?.vrioOrderId
-          ? `Vrio Ref: ${res.data.data.vrioOrderId}`
+          ? `Order Ref: #${res.data.data.vrioOrderId}`
           : undefined,
       });
     } catch (err) {
