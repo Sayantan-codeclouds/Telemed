@@ -74,14 +74,14 @@ export default function VideoPanel({
       localVideoRef.current.srcObject = localStream;
       localVideoRef.current.play().catch(() => {});
     }
-  }, [localStream]);
+  }, [localStream, isVideoOff]);
 
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
       remoteVideoRef.current.play().catch(() => {});
     }
-  }, [remoteStream]);
+  }, [remoteStream, remoteVideoEnabled]);
 
   const isDoctor = user.type === "Doctor";
   const remoteRole = isDoctor ? "Patient" : "Doctor";

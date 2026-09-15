@@ -6,9 +6,24 @@ const ICE_SERVERS = {
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:stun3.l.google.com:19302" },
-    { urls: "stun:stun4.l.google.com:19302" },
+    { urls: "stun:openrelay.metered.ca:80" },
+    {
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelay",
+      credential: "openrelay",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443",
+      username: "openrelay",
+      credential: "openrelay",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443?transport=tcp",
+      username: "openrelay",
+      credential: "openrelay",
+    },
   ],
+  iceCandidatePoolSize: 10,
 };
 
 /**
@@ -130,22 +145,30 @@ export default function useWebRTC(roomId, user) {
     }
   };
 
-  // ─── HELPER: Doctor creates and sends an offer ────────────────────────────
-  const createOffer = useCallback(async () => {
+  // ─── HELPER: initiate offer with ICE restart option ──────────────────────
+  const initiateOffer = useCallback(async (isRestart = false) => {
     const pc = pcRef.current;
-    if (!pc || isPolite) return; // Only Doctor (impolite) sends offers
+    if (!pc) return;
     if (makingOffer.current) return;
     if (pc.signalingState !== "stable") return;
 
     try {
       makingOffer.current = true;
       setConnectionStatus("connecting");
-      const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
-      if (pc.signalingState !== "stable") return; // Re-check after async
+      const offer = await pc.createOffer({
+        iceRestart: isRestart,
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
+      if (pc.signalingState !== "stable") return;
       await pc.setLocalDescription(offer);
-      socket.emit("video-offer", { roomId, offer: pc.localDescription, senderName: user?.name || "Doctor" });
+      socket.emit("video-offer", {
+        roomId,
+        offer: pc.localDescription,
+        senderName: user?.name || (isPolite ? "Patient" : "Doctor"),
+      });
     } catch (err) {
-      console.warn("createOffer error:", err.message);
+      console.warn("initiateOffer error:", err.message);
     } finally {
       makingOffer.current = false;
     }
@@ -229,14 +252,23 @@ export default function useWebRTC(roomId, user) {
       // Attach to peer connection if it was created before media resolved
       const pc = pcRef.current;
       if (pc && pc.connectionState !== "closed") {
+        let added = false;
         stream.getTracks().forEach((track) => {
-          const exists = pc.getSenders().some((s) => s.track?.id === track.id);
-          if (!exists) {
-            try { pc.addTrack(track, stream); } catch (_) {}
+          const senders = pc.getSenders();
+          const sender = senders.find((s) => s.track?.kind === track.kind);
+          if (sender) {
+            sender.replaceTrack(track);
+          } else {
+            try {
+              pc.addTrack(track, stream);
+              added = true;
+            } catch (_) {}
           }
         });
-        // Trigger a fresh offer since we just attached tracks
-        setTimeout(() => createOffer(), 300);
+        // Trigger negotiation if new tracks were added
+        if (added || !isPolite) {
+          setTimeout(() => initiateOffer(), 300);
+        }
       }
     }
 
@@ -253,7 +285,7 @@ export default function useWebRTC(roomId, user) {
       }
       if (screenTrackRef.current) { screenTrackRef.current.stop(); screenTrackRef.current = null; }
     };
-  }, [user?.type, user?.name]);
+  }, [user?.type, user?.name, initiateOffer, isPolite]);
 
   // ─── 2. RETRY PHYSICAL CAMERA ─────────────────────────────────────────────
   const retryPhysicalCamera = useCallback(async () => {
@@ -278,11 +310,12 @@ export default function useWebRTC(roomId, user) {
           if (sender) sender.replaceTrack(track);
           else pc.addTrack(track, stream);
         });
+        setTimeout(() => initiateOffer(), 300);
       }
     } catch (err) {
       console.warn("Retry camera failed:", err.message);
     }
-  }, []);
+  }, [initiateOffer]);
 
   // ─── 3. PEER CONNECTION + SIGNALING ───────────────────────────────────────
   useEffect(() => {
@@ -302,25 +335,48 @@ export default function useWebRTC(roomId, user) {
     }
 
     // Remote stream
-    pc.ontrack = ({ streams }) => {
-      if (streams?.[0]) {
-        setRemoteStream(streams[0]);
-        setConnectionStatus("connected");
+    pc.ontrack = (event) => {
+      if (event.streams && event.streams[0]) {
+        setRemoteStream(event.streams[0]);
+      } else if (event.track) {
+        setRemoteStream((prev) => {
+          const stream = prev || new MediaStream();
+          if (!stream.getTracks().some((t) => t.id === event.track.id)) {
+            stream.addTrack(event.track);
+          }
+          return new MediaStream(stream.getTracks());
+        });
       }
+      setConnectionStatus("connected");
     };
 
     // ICE generation
     pc.onicecandidate = ({ candidate }) => {
-      if (candidate) socket.emit("ice-candidate", { roomId, candidate });
+      if (candidate) {
+        const payload = candidate.toJSON ? candidate.toJSON() : candidate;
+        socket.emit("ice-candidate", { roomId, candidate: payload });
+      }
     };
 
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
       if (s === "connected") setConnectionStatus("connected");
       else if (s === "connecting") setConnectionStatus("connecting");
-      else if (["disconnected", "failed", "closed"].includes(s)) {
+      else if (["disconnected", "closed"].includes(s)) {
         setConnectionStatus("disconnected");
-        setRemoteStream(null);
+      } else if (s === "failed") {
+        console.warn("Peer connection failed, triggering ICE restart");
+        if (!isPolite) initiateOffer(true);
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      const state = pc.iceConnectionState;
+      if (state === "connected" || state === "completed") {
+        setConnectionStatus("connected");
+      } else if (state === "failed") {
+        console.warn("ICE connection failed, triggering ICE restart");
+        if (!isPolite) initiateOffer(true);
       }
     };
 
@@ -328,7 +384,7 @@ export default function useWebRTC(roomId, user) {
     const handleRoomJoined = ({ othersPresent }) => {
       if (!isPolite && othersPresent > 0) {
         // Doctor arrived AFTER Patient — need to initiate offer
-        setTimeout(() => createOffer(), 200);
+        setTimeout(() => initiateOffer(), 300);
       }
     };
 
@@ -336,11 +392,11 @@ export default function useWebRTC(roomId, user) {
     const handleUserJoined = () => {
       if (!isPolite) {
         // Doctor always creates offer when anyone new joins
-        setTimeout(() => createOffer(), 100);
+        setTimeout(() => initiateOffer(), 200);
       }
     };
 
-    // ── Incoming offer (for Patient/polite peer) ───────────────────────────
+    // ── Incoming offer (for Patient/polite peer or doctor renegotiation) ───
     const handleVideoOffer = async ({ offer }) => {
       try {
         const collision = makingOffer.current || pc.signalingState !== "stable";
@@ -416,7 +472,7 @@ export default function useWebRTC(roomId, user) {
       socket.off("media-state-changed", handleMediaState);
       pc.close();
     };
-  }, [roomId, user?.name, isPolite, createOffer]);
+  }, [roomId, user?.name, isPolite, initiateOffer]);
 
   // ─── 4. TOGGLE AUDIO ──────────────────────────────────────────────────────
   const toggleAudio = useCallback(() => {

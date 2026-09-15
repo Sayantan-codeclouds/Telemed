@@ -62,7 +62,7 @@ export default function Consultation() {
 
   const [connected, setConnected] = useState(false);
   const [appointment, setAppointment] = useState(null);
-  const [isChatOpen, setIsChatOpen] = useState(true);
+  const [isChatOpen, setIsChatOpen] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
 
   // Drawer states
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -216,7 +216,7 @@ export default function Consultation() {
   const patientDetails = isDoctor ? appointment?.patient : storedUser;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] w-full max-w-full rounded-3xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl text-slate-100 font-sans">
+    <div className="flex flex-col h-screen w-full overflow-hidden bg-slate-950 text-slate-100 font-sans select-none">
       {/* Header Bar */}
       <ConsultationHeader
         connected={connected}
@@ -226,7 +226,7 @@ export default function Consultation() {
       />
 
       {/* Main Stage & Right Panel (Zero Scrollbar Container) */}
-      <div className="flex-1 flex overflow-hidden p-2.5 sm:p-3 gap-2.5 sm:gap-3 bg-slate-950 min-h-0">
+      <div className="flex-1 flex overflow-hidden p-2 sm:p-3 gap-2 sm:gap-3 bg-slate-950 min-h-0 relative">
         {/* LEFT / CENTER: Full HD Video Panel Stage */}
         <div className="flex-1 h-full rounded-2xl overflow-hidden bg-slate-900 border border-slate-800/80 shadow-inner relative min-h-0">
           <VideoPanel
@@ -247,7 +247,7 @@ export default function Consultation() {
 
         {/* RIGHT: Live Clinical Chat & Sidebar */}
         {isChatOpen && (
-          <div className="w-80 sm:w-88 md:w-96 h-full flex flex-col rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 shadow-xl shrink-0 animate-in slide-in-from-right-5 duration-200 min-h-0">
+          <div className="md:relative absolute inset-y-2 sm:inset-y-3 right-2 sm:right-3 z-30 w-80 sm:w-88 md:w-96 h-[calc(100%-16px)] sm:h-[calc(100%-24px)] md:h-full flex flex-col rounded-2xl overflow-hidden bg-slate-900/95 md:bg-slate-900 border border-slate-800 shadow-2xl shrink-0 animate-in slide-in-from-right-5 duration-200 min-h-0 backdrop-blur-md">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800 bg-slate-900/90 backdrop-blur shrink-0">
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-4 h-4 text-blue-400" />
