@@ -63,6 +63,9 @@ const DEFAULT_SETTINGS = {
   checkoutChampConsultationCampaignId: 1,
   checkoutChampConsultationProductId: 3366,
   checkoutChampConsultationShippingId: 1,
+  // Public Deployment URLs
+  frontendUrl: "",
+  appUrl: "",
 };
 
 /**
@@ -136,6 +139,8 @@ export const updateCrmSettingsService = async (data) => {
   if (data.isTestMode !== undefined) settings.isTestMode = Boolean(data.isTestMode);
   if (data.resendApiKey !== undefined) settings.resendApiKey = data.resendApiKey.trim();
   if (data.resendFromEmail !== undefined) settings.resendFromEmail = data.resendFromEmail.trim();
+  if (data.frontendUrl !== undefined) settings.frontendUrl = data.frontendUrl.trim();
+  if (data.appUrl !== undefined) settings.appUrl = data.appUrl.trim();
 
   // Multi-provider mail settings
   if (data.mailProvider !== undefined) settings.mailProvider = data.mailProvider.trim().toLowerCase();

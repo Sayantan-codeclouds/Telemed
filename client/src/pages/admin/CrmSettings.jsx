@@ -258,6 +258,9 @@ const DEFAULT_FORM = {
   checkoutChampConsultationCampaignId: 1,
   checkoutChampConsultationProductId: 3366,
   checkoutChampConsultationShippingId: 1,
+  // Public Deployment URLs
+  frontendUrl: "",
+  appUrl: "",
 };
 
 export default function AdminCrmSettings() {
@@ -609,6 +612,55 @@ export default function AdminCrmSettings() {
                   <span className="text-[11px] text-slate-400 mt-1 block">{f.hint}</span>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+
+          {/* Public Production Domains & URLs */}
+          <Card className="rounded-2xl border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                  <ExternalLink className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">Public Production Domains &amp; URLs</h2>
+                  <p className="text-xs text-slate-400">Used in all outgoing emails, verification links, and prescription links instead of localhost.</p>
+                </div>
+              </div>
+            </div>
+            <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <ExternalLink className="w-3.5 h-3.5 text-blue-600" /> Live Frontend URL (Patient / Doctor Web App)
+                </label>
+                <Input
+                  type="url"
+                  name="frontendUrl"
+                  value={formData.frontendUrl || ""}
+                  onChange={handleChange}
+                  placeholder="https://your-telemed.netlify.app or https://your-site.vercel.app"
+                  className="rounded-xl font-semibold border-slate-200 h-11 text-xs"
+                />
+                <span className="text-[11px] text-slate-400 mt-1 block">
+                  All email buttons (Verify Account, Reset Password, View Invoice) link to this domain.
+                </span>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Server className="w-3.5 h-3.5 text-indigo-600" /> Backend API URL (Render Web Service)
+                </label>
+                <Input
+                  type="url"
+                  name="appUrl"
+                  value={formData.appUrl || ""}
+                  onChange={handleChange}
+                  placeholder="https://telemed-zuls.onrender.com"
+                  className="rounded-xl font-semibold border-slate-200 h-11 text-xs"
+                />
+                <span className="text-[11px] text-slate-400 mt-1 block">
+                  Used for uploaded lab reports, profile image assets, and API routes.
+                </span>
+              </div>
             </CardContent>
           </Card>
         </div>

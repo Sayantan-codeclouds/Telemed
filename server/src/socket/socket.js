@@ -7,14 +7,10 @@ let io;
 export const initializeSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin: [
-        process.env.FRONTEND_URL,
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-      ].filter(Boolean),
+      origin: (origin, callback) => {
+        // Allow all frontend origins (Render, Netlify, Vercel, Localhost, Mobile)
+        callback(null, true);
+      },
       methods: ["GET", "POST"],
       credentials: true,
     },

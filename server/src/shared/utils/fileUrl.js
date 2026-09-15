@@ -18,6 +18,14 @@ export const getProfileImageFilename = (value) => {
   );
 };
 
+export const getEffectiveAppUrl = () => {
+  return (
+    process.env.APP_URL ||
+    process.env.RENDER_EXTERNAL_URL ||
+    (process.env.NODE_ENV === "production" ? "https://telemed-zuls.onrender.com" : "http://localhost:5000")
+  ).replace(/\/+$/, "");
+};
+
 export const getProfileImage = (filename) => {
   if (!filename || typeof filename !== "string") {
     return null;
@@ -35,7 +43,7 @@ export const getProfileImage = (filename) => {
     return null;
   }
 
-  const appUrl = process.env.APP_URL?.replace(/\/+$/, "") || "http://localhost:5000";
+  const appUrl = getEffectiveAppUrl();
   return `${appUrl}/uploads/profile-images/${imageFilename}`;
 };
 
@@ -107,7 +115,7 @@ export const getLabReportUrl = (filename) => {
     return null;
   }
 
-  const appUrl = process.env.APP_URL?.replace(/\/+$/, "") || "http://localhost:5000";
+  const appUrl = getEffectiveAppUrl();
   return `${appUrl}/uploads/lab-reports/${cleanFilename}`;
 };
 

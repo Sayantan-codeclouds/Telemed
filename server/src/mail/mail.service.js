@@ -188,10 +188,24 @@ export async function sendMailWithProvider({ to, subject, html, text }) {
 }
 
 /**
+ * Resolves the active frontend domain dynamically from CRM settings or environment
+ */
+export const getEffectiveFrontendUrl = async () => {
+  try {
+    const settings = await getCrmSettingsService();
+    if (settings?.frontendUrl && settings.frontendUrl.trim()) {
+      return settings.frontendUrl.trim().replace(/\/+$/, "");
+    }
+  } catch (_) {}
+  return (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/+$/, "");
+};
+
+/**
  * Send a verification email to a newly registered doctor
  */
 export const sendDoctorVerificationEmail = async (email, token) => {
-  const verificationLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/doctor/verify-email?token=${token}`;
+  const frontendUrl = await getEffectiveFrontendUrl();
+  const verificationLink = `${frontendUrl}/doctor/verify-email?token=${token}`;
 
   return await sendMailWithProvider({
     to: email,
@@ -235,7 +249,8 @@ export const sendDoctorVerificationEmail = async (email, token) => {
  * Send a verification email to a patient
  */
 export const sendPatientVerificationEmail = async (patient, verificationToken) => {
-  const verificationLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/patient/verify-email?token=${verificationToken}`;
+  const frontendUrl = await getEffectiveFrontendUrl();
+  const verificationLink = `${frontendUrl}/patient/verify-email?token=${verificationToken}`;
 
   return await sendMailWithProvider({
     to: patient.email,
@@ -248,7 +263,8 @@ export const sendPatientVerificationEmail = async (patient, verificationToken) =
  * Send password reset email to patient
  */
 export const sendResetPasswordEmail = async (email, token) => {
-  const resetLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/patient/reset-password?token=${token}`;
+  const frontendUrl = await getEffectiveFrontendUrl();
+  const resetLink = `${frontendUrl}/patient/reset-password?token=${token}`;
 
   return await sendMailWithProvider({
     to: email,
@@ -292,7 +308,8 @@ export const sendResetPasswordEmail = async (email, token) => {
  * Send password reset email to doctor
  */
 export const sendDoctorResetPasswordEmail = async (email, token) => {
-  const resetLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/doctor/reset-password?token=${token}`;
+  const frontendUrl = await getEffectiveFrontendUrl();
+  const resetLink = `${frontendUrl}/doctor/reset-password?token=${token}`;
 
   return await sendMailWithProvider({
     to: email,
@@ -345,6 +362,7 @@ export const sendRecheckupReminderEmail = async ({
   recheckupDate,
   bookingUrl,
 }) => {
+  const frontendUrl = await getEffectiveFrontendUrl();
   const html = recheckupReminderEmailTemplate({
     patientName,
     doctorName,
@@ -352,7 +370,7 @@ export const sendRecheckupReminderEmail = async ({
     diagnosis,
     validityDays,
     recheckupDate,
-    bookingUrl: bookingUrl || `${process.env.FRONTEND_URL || "http://localhost:5173"}/patient/doctors`,
+    bookingUrl: bookingUrl || `${frontendUrl}/patient/doctors`,
   });
 
   return await sendMailWithProvider({
@@ -466,7 +484,7 @@ export const sendAdminSupportTicketAlertEmail = async ({
           </div>
 
           <div style="margin-top:24px;text-align:center;">
-            <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/admin/support" style="display:inline-block;background:#4f46e5;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:13px;">
+            <a href="${await getEffectiveFrontendUrl()}/admin/support" style="display:inline-block;background:#4f46e5;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:13px;">
               Open in Admin Support Desk →
             </a>
           </div>
@@ -575,13 +593,14 @@ export const sendOrderInvoiceEmail = async (order) => {
 
     const orderRef = order.vrioOrderId || order.stickyCrmOrderId || order._id?.toString().slice(-8).toUpperCase();
 
+    const frontendUrl = await getEffectiveFrontendUrl();
     const html = orderInvoiceEmailTemplate({
       order,
       patientName,
       currencySign,
       supportEmail,
       orderRef,
-      frontendUrl: process.env.FRONTEND_URL || "http://localhost:5173",
+      frontendUrl,
     });
 
     const res = await sendMailWithProvider({
