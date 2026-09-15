@@ -77,7 +77,7 @@ export const createSupportTicketService = async (data, user, userType = "Guest")
     name: senderName,
     email: senderEmail,
     phone: senderPhone,
-    category,
+    category: category?.trim() || "General Inquiry",
     priority: ["LOW", "MEDIUM", "HIGH", "URGENT"].includes(priority) ? priority : "MEDIUM",
     subject: subject.trim(),
     message: message.trim(),

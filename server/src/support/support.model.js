@@ -44,16 +44,7 @@ const supportTicketSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: [
-        "Technical & App Issue",
-        "Appointments & Consultations",
-        "Prescriptions & Medicines",
-        "Pharmacy & Delivery",
-        "Billing & Payments",
-        "Gift Cards & Coupons",
-        "Account & Security",
-        "General Inquiry",
-      ],
+      trim: true,
       default: "General Inquiry",
     },
     priority: {
