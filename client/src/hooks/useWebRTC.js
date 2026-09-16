@@ -3,27 +3,34 @@ import socket from "@/socket/socket";
 
 const ICE_SERVERS = {
   iceServers: [
+    // Google STUN servers
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:openrelay.metered.ca:80" },
+    { urls: "stun:stun3.l.google.com:19302" },
+    { urls: "stun:stun4.l.google.com:19302" },
+    // Cloudflare STUN
+    { urls: "stun:stun.cloudflare.com:3478" },
+    // OpenRelay TURN (free public - for NAT traversal)
     {
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelay",
-      credential: "openrelay",
+      urls: [
+        "turn:openrelay.metered.ca:80",
+        "turn:openrelay.metered.ca:443",
+        "turn:openrelay.metered.ca:443?transport=tcp",
+      ],
+      username: "openrelayproject",
+      credential: "openrelayproject",
     },
+    // FreeICE TURN (backup)
     {
-      urls: "turn:openrelay.metered.ca:443",
-      username: "openrelay",
-      credential: "openrelay",
-    },
-    {
-      urls: "turn:openrelay.metered.ca:443?transport=tcp",
-      username: "openrelay",
-      credential: "openrelay",
+      urls: "turn:relay.metered.ca:80",
+      username: "e8dd65f0f7c7f814e18e7c25",
+      credential: "uPmUCJkzqFNz0f9Q",
     },
   ],
   iceCandidatePoolSize: 10,
+  bundlePolicy: "max-bundle",
+  rtcpMuxPolicy: "require",
 };
 
 /**
@@ -108,7 +115,7 @@ function createVirtualMediaStream(userTitle = "Doctor", userName = "") {
       const silentAudio = dest.stream.getAudioTracks()[0];
       if (silentAudio) stream.addTrack(silentAudio);
     }
-  } catch (_) {}
+  } catch {}
 
   stream.__stopAnimation = () => { if (animId) cancelAnimationFrame(animId); };
   return stream;
@@ -141,7 +148,7 @@ export default function useWebRTC(roomId, user) {
     const queued = [...pendingCandidates.current];
     pendingCandidates.current = [];
     for (const c of queued) {
-      try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch (_) {}
+      try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
     }
   };
 
@@ -190,7 +197,7 @@ export default function useWebRTC(roomId, user) {
           if (camPerm.state === "denied") {
             errorType = "denied";
           }
-        } catch (_) {}
+        } catch {}
       }
 
       if (errorType !== "denied" && navigator.mediaDevices?.getUserMedia) {
@@ -243,15 +250,15 @@ export default function useWebRTC(roomId, user) {
         setIsVirtualStream(virtual);
       } else if (errorType === "denied") {
         // Permission denied — create a virtual stream so peer connection works
-        const denyStream = createVirtualMediaStream(user?.type, user?.name);
-        localStreamRef.current = denyStream;
-        setLocalStream(denyStream);
+        stream = createVirtualMediaStream(user?.type, user?.name);
+        localStreamRef.current = stream;
+        setLocalStream(stream);
         setIsVirtualStream(true);
       }
 
       // Attach to peer connection if it was created before media resolved
       const pc = pcRef.current;
-      if (pc && pc.connectionState !== "closed") {
+      if (pc && pc.connectionState !== "closed" && stream) {
         let added = false;
         stream.getTracks().forEach((track) => {
           const senders = pc.getSenders();
@@ -262,7 +269,7 @@ export default function useWebRTC(roomId, user) {
             try {
               pc.addTrack(track, stream);
               added = true;
-            } catch (_) {}
+            } catch {}
           }
         });
         // Trigger negotiation if new tracks were added
@@ -330,7 +337,7 @@ export default function useWebRTC(roomId, user) {
     // Attach local tracks if media is already ready
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
-        try { pc.addTrack(track, localStreamRef.current); } catch (_) {}
+        try { pc.addTrack(track, localStreamRef.current); } catch {}
       });
     }
 
@@ -362,7 +369,17 @@ export default function useWebRTC(roomId, user) {
       const s = pc.connectionState;
       if (s === "connected") setConnectionStatus("connected");
       else if (s === "connecting") setConnectionStatus("connecting");
-      else if (["disconnected", "closed"].includes(s)) {
+      else if (s === "disconnected") {
+        setConnectionStatus("disconnected");
+        // Try ICE restart after brief disconnection
+        if (!isPolite) {
+          setTimeout(() => {
+            if (pcRef.current?.connectionState === "disconnected") {
+              initiateOffer(true);
+            }
+          }, 2000);
+        }
+      } else if (s === "closed") {
         setConnectionStatus("disconnected");
       } else if (s === "failed") {
         console.warn("Peer connection failed, triggering ICE restart");
@@ -383,8 +400,9 @@ export default function useWebRTC(roomId, user) {
     // ── room-joined: sent by server when WE join, tells us if others are present ──
     const handleRoomJoined = ({ othersPresent }) => {
       if (!isPolite && othersPresent > 0) {
-        // Doctor arrived AFTER Patient — need to initiate offer
-        setTimeout(() => initiateOffer(), 300);
+        // Doctor arrived AFTER Patient — initiate offer after a short delay
+        // to allow media tracks to be attached first
+        setTimeout(() => initiateOffer(), 500);
       }
     };
 
@@ -392,7 +410,8 @@ export default function useWebRTC(roomId, user) {
     const handleUserJoined = () => {
       if (!isPolite) {
         // Doctor always creates offer when anyone new joins
-        setTimeout(() => initiateOffer(), 200);
+        // Use longer delay to avoid double-offer with room-joined
+        setTimeout(() => initiateOffer(), 600);
       }
     };
 
