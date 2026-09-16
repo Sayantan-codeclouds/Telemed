@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Send, Wifi, WifiOff, Loader2, Sparkles } from "lucide-react";
+import { Send, Loader2 } from "lucide-react";
 import socket from "../../socket/socket";
 import api from "../../api/axios";
 import doctorApi from "../../api/doctorApi";
@@ -13,7 +13,7 @@ export default function ChatPanel({ user, doctor }) {
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [message, setMessage] = useState("");
   const [typingUser, setTypingUser] = useState("");
-  const [connected, setConnected] = useState(socket.connected);
+  const [, setConnected] = useState(socket.connected);
   const typingTimeout = useRef(null);
   const messagesEndRef = useRef(null);
 

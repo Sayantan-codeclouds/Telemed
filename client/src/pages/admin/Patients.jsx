@@ -8,15 +8,7 @@ import {
   UserPlus,
   X,
   User,
-  Mail,
-  Phone,
-  Lock,
   Calendar,
-  HeartPulse,
-  Droplet,
-  ShieldCheck,
-  ArrowUpDown,
-  Filter,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

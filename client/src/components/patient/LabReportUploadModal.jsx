@@ -5,10 +5,6 @@ import {
   Image as ImageIcon,
   X,
   Loader2,
-  Calendar,
-  Building2,
-  Stethoscope,
-  AlertCircle,
   CheckCircle2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";

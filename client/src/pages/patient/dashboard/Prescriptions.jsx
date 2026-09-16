@@ -4,21 +4,17 @@ import {
   FileText,
   Loader2,
   Pill,
-  Calendar,
-  User,
   Download,
   Stethoscope,
   Sparkles,
   ShoppingCart,
-  CheckCircle2,
   ArrowRight,
   ShieldCheck,
-  Info,
   Clock,
   Filter,
   X,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";

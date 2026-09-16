@@ -14,7 +14,7 @@ import { useCurrency } from "../../contexts/CurrencyContext";
 export default function AppointmentCard({
   appointment,
 }) {
-  const { formatPrice, currencySign } = useCurrency();
+  const { formatPrice } = useCurrency();
   const doctor = appointment.doctor;
   const navigate = useNavigate();
 

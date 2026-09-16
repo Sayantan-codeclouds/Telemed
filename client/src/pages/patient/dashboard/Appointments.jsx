@@ -9,17 +9,12 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
-  AlertCircle,
   Stethoscope,
   Building2,
-  IndianRupee,
-  ChevronRight,
-  Sparkles,
   ArrowRight,
   ShieldCheck,
   Eye,
   Trash2,
-  Bot,
   Star,
   Receipt,
 } from "lucide-react";
@@ -44,7 +39,7 @@ const STATUS_TABS = [
 
 export default function Appointments() {
   const navigate = useNavigate();
-  const { formatPrice, currencySign } = useCurrency();
+  const { formatPrice } = useCurrency();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("ALL");

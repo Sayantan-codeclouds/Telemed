@@ -6,7 +6,6 @@ import {
   Loader2,
   CheckCircle2,
   X,
-  Stethoscope,
   Sparkles,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";

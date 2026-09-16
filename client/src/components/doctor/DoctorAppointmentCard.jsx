@@ -1,7 +1,6 @@
 import {
   Calendar,
   Clock,
- User,
   CheckCircle,
   XCircle,
   Video,
@@ -13,7 +12,6 @@ export default function DoctorAppointmentCard({
   appointment,
   onAccept,
   onReject,
-  onJoin,
   onView,
 }) {
   const patient = appointment.patient;

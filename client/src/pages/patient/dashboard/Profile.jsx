@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   Mail,
   Phone,
@@ -17,12 +16,10 @@ import {
   Scale,
   Gauge,
   Loader2,
-  Sparkles,
   PhoneCall,
   UserCheck,
-  Building,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";

@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
 import {
   Pill,
   Search,
@@ -7,41 +6,24 @@ import {
   Plus,
   Minus,
   Trash2,
-  CheckCircle,
-  Package,
-  Clock,
   Loader2,
-  ShieldCheck,
   CreditCard,
   Building,
   Sparkles,
-  ArrowRight,
   FileText,
   Lock,
   CheckCircle2,
-  AlertCircle,
   Tag,
   Gift,
-  Layers,
-  Zap,
-  Info,
   X,
-  Download,
-  Truck,
-  MapPin,
-  Receipt,
-  Calendar,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import api from "@/api/axios";
-import { downloadInvoicePdf } from "@/utils/invoiceGenerator";
 import PatientOrders from "./Orders";
 
 const CATEGORIES = [
@@ -580,35 +562,6 @@ export default function Pharmacy() {
       setSubmittingOrder(false);
     }
   };
-
-  const [expandedOrders, setExpandedOrders] = useState({});
-  const [downloadingId, setDownloadingId] = useState(null);
-
-  const toggleOrderExpand = (id) =>
-    setExpandedOrders((prev) => ({ ...prev, [id]: !prev[id] }));
-
-  const handleDownloadInvoice = (ord) => {
-    setDownloadingId(ord._id);
-    try {
-      downloadInvoicePdf(ord, currencySign);
-      toast.success("Invoice downloaded successfully!");
-    } catch (err) {
-      console.error("Invoice generation error:", err);
-      toast.error("Failed to generate invoice.");
-    } finally {
-      setDownloadingId(null);
-    }
-  };
-
-  const STATUS_META = {
-    PENDING:    { color: "bg-amber-50 text-amber-700 border-amber-200",   icon: Clock,        label: "Pending" },
-    PROCESSING: { color: "bg-blue-50 text-blue-700 border-blue-200",     icon: Package,      label: "Processing" },
-    SHIPPED:    { color: "bg-purple-50 text-purple-700 border-purple-200", icon: Truck,       label: "Shipped" },
-    DELIVERED:  { color: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2, label: "Delivered" },
-    CANCELLED:  { color: "bg-rose-50 text-rose-700 border-rose-200",     icon: X,            label: "Cancelled" },
-  };
-
-  const getStatusMeta = (s) => STATUS_META[s] || STATUS_META.PENDING;
 
   return (
     <div className="space-y-6">

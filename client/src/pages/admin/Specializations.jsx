@@ -8,34 +8,17 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
-  ShieldAlert,
-  Sparkles,
-  HeartPulse,
-  Baby,
-  Brain,
-  Bone,
-  Eye,
-  Smile,
-  Activity,
-  Zap,
-  Tag,
   Layers,
   X,
   Users,
-  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import adminApi from "@/api/adminApi";

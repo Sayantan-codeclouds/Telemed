@@ -5,15 +5,8 @@ import {
   Trash2,
   Calendar,
   Clock,
-  User,
-  Stethoscope,
   X,
-  Filter,
-  ArrowUpDown,
-  CreditCard,
-  Building,
   Eye,
-  CalendarDays,
   ShieldCheck,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -48,7 +41,7 @@ const STATUS_LIST = [
 ];
 
 export default function AdminAppointments() {
-  const { formatPrice, currencySign } = useCurrency();
+  const { formatPrice } = useCurrency();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings as SettingsIcon, Shield, Bell, Lock, KeyRound, CheckCircle2, Loader2 } from "lucide-react";
+import { Settings as Bell, KeyRound, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

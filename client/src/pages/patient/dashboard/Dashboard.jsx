@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   CalendarDays,
   Pill,
@@ -15,27 +15,18 @@ import {
   Loader2,
   Sparkles,
   ShoppingBag,
-  ShieldCheck,
-  Zap,
-  TrendingUp,
-  Award,
   ChevronRight,
   Plus,
   Droplets,
-  Heart,
-  Scale,
-  Sparkle,
-  Compass,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import api from "@/api/axios";
 import { getProfileImageUrl } from "@/utils/imageUrl";
 
 export default function Dashboard() {
-  const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
@@ -72,16 +63,11 @@ export default function Dashboard() {
 
   const storedUser = JSON.parse(localStorage.getItem("patient") || "{}");
   const patientName = profile?.firstName || storedUser?.firstName || "Patient";
-  const patientFullName = `${patientName} ${profile?.lastName || storedUser?.lastName || ""}`.trim();
 
   // Calculate live stats
   const upcomingAppointments = appointments.filter(
     (a) => a.status === "CONFIRMED" || a.status === "PENDING"
   );
-  const completedConsultations = appointments.filter(
-    (a) => a.status === "COMPLETED"
-  );
-
   // Next upcoming appointment
   const nextAppointment =
     appointments.find((a) => a.status === "CONFIRMED") ||

@@ -8,15 +8,11 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
-  Shield,
   ArrowRight,
-  Activity,
   Database,
   Sparkles,
   Trash2,
   Server,
-  Zap,
-  TrendingUp,
   Pill,
   ShoppingBag,
 } from "lucide-react";
@@ -26,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import adminApi from "@/api/adminApi";
 
-function StatCard({ label, value, icon: Icon, color, loading, subtitle, trend }) {
+function StatCard({ label, value, icon: Icon, color, loading, subtitle }) {
   const colorMap = {
     blue: "bg-blue-50 text-blue-600 border-blue-100",
     emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",

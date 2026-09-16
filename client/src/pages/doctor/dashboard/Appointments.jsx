@@ -9,20 +9,10 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
-  AlertCircle,
-  Stethoscope,
-  Building2,
-  IndianRupee,
-  ChevronRight,
-  Sparkles,
-  ArrowRight,
   ShieldCheck,
   Eye,
   Check,
   X,
-  User,
-  Activity,
-  HeartPulse,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,7 +33,7 @@ const STATUS_TABS = [
 
 export default function DoctorAppointments() {
   const navigate = useNavigate();
-  const { formatPrice, currencySign } = useCurrency();
+  const { formatPrice } = useCurrency();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("TODAY");

@@ -11,12 +11,8 @@ import {
   BellRing,
   Heart,
   Send,
-  CheckCircle2,
-  Clock,
-  Sparkles,
   Download,
   ShieldCheck,
-  FileBadge,
   ShoppingBag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";

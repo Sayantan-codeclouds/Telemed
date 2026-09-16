@@ -3,16 +3,10 @@ import { useLocation, useParams, useNavigate } from "react-router-dom";
 import {
   PhoneOff,
   CheckCircle2,
-  AlertCircle,
   FileText,
   Calendar,
-  Sparkles,
   Loader2,
-  ShieldCheck,
-  ArrowRight,
   MessageSquare,
-  User,
-  Pill,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";

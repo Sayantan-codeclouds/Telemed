@@ -18,7 +18,7 @@ export function CurrencyProvider({ children }) {
       const sign = res.data?.data?.currencySign || "$";
       setCurrencySign(sign);
       localStorage.setItem("telemed_currency_sign", sign);
-    } catch (_) {
+    } catch {
       // Keep existing cached currency
     }
   }, []);

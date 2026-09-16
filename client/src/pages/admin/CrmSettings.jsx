@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Key, Layers, CheckCircle2, Loader2, Save, RefreshCw, Zap,
   ShieldCheck, ToggleLeft, ToggleRight, Info, Mail, LifeBuoy,
-  Sparkles, Video, Bot, Settings, Send, Server, Check, ExternalLink, Lock,
-  Cpu, Gauge, Terminal
+  Sparkles, Video, Bot, Settings, Send, Server, Check, ExternalLink,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";

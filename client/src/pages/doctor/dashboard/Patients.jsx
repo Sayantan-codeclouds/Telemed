@@ -6,25 +6,17 @@ import {
   Phone,
   Calendar,
   Loader2,
-  ArrowRight,
   ShieldCheck,
-  HeartPulse,
-  Clock,
-  ChevronRight,
-  FileText,
-  UserCheck,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import doctorApi from "@/api/doctorApi";
 
 export default function DoctorPatients() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [selectedPatient, setSelectedPatient] = useState(null);
 
   useEffect(() => {
     const fetchPatients = async () => {

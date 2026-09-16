@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Sparkles, Loader2, AlertCircle, CheckCircle2, FileText, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { Sparkles, Loader2, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";

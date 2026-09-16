@@ -1,18 +1,12 @@
 import { useState, useEffect } from "react";
 import {
   Star,
-  Sparkles,
-  CheckCircle2,
   X,
   Loader2,
   ShieldCheck,
-  Stethoscope,
-  Heart,
-  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import api from "@/api/axios";
 import { getProfileImageUrl } from "@/utils/imageUrl";

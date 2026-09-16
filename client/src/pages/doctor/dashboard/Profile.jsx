@@ -6,26 +6,19 @@ import {
   Stethoscope,
   Award,
   CreditCard,
-  MapPin,
   ShieldCheck,
   Edit2,
-  CalendarDays,
   FileBadge,
-  Clock,
-  Video,
   Loader2,
   AlertCircle,
-  Sparkles,
   Star,
   MessageSquare,
   Send,
-  ThumbsUp,
   PenTool,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import doctorApi from "@/api/doctorApi";
 import EditDoctorProfileDrawer from "@/components/doctor/EditDoctorProfileDrawer";
@@ -33,7 +26,7 @@ import SignatureStampModal from "@/components/doctor/SignatureStampModal";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
 export default function DoctorProfile() {
-  const { formatPrice, currencySign } = useCurrency();
+  const { formatPrice } = useCurrency();
   const [doctor, setDoctor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [openEdit, setOpenEdit] = useState(false);

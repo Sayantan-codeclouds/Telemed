@@ -3,10 +3,8 @@ import {
   ShieldCheck,
   PhoneOff,
   Wifi,
-  Sparkles,
   Stethoscope,
   Clock,
-  Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

@@ -9,7 +9,6 @@ import {
   Bot,
   Settings,
   LogOut,
-  HeartPulse,
   LifeBuoy,
 } from "lucide-react";
 

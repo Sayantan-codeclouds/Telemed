@@ -24,8 +24,6 @@ import {
   ChevronRight,
   ChevronLeft,
   ShieldCheck,
-  Calendar,
-  Building,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../../api/axios";

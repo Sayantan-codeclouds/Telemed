@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import {
   FileText,
   Loader2,
@@ -8,7 +8,6 @@ import {
   User,
   Clock,
   CheckCircle2,
-  Sparkles,
   ChevronDown,
   ChevronUp,
   Calendar,
@@ -28,7 +27,6 @@ import { downloadPrescriptionPdf } from "@/utils/prescriptionGenerator";
 import { toast } from "sonner";
 
 export default function DoctorPrescriptions() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const targetApptId = searchParams.get("appointmentId");
 

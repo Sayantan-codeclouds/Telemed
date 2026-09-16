@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
   User,
-  Mail,
-  Phone,
   ShieldCheck,
   Camera,
   KeyRound,
@@ -11,11 +9,6 @@ import {
   EyeOff,
   CheckCircle2,
   Loader2,
-  Calendar,
-  Sparkles,
-  RefreshCw,
-  AlertCircle,
-  Clock,
   Shield,
   Upload,
 } from "lucide-react";

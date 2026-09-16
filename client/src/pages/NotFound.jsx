@@ -9,15 +9,12 @@ import {
   Shield,
   Pill,
   Calendar,
-  Sparkles,
   Bot,
   AlertTriangle,
   RefreshCw,
-  Clock,
   ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 
 export default function NotFound() {
   const navigate = useNavigate();
@@ -30,7 +27,6 @@ export default function NotFound() {
 
   const pathname = location.pathname.toLowerCase();
 
-  let targetRole = "guest";
   let targetPath = "/";
   let targetTitle = "TeleClinic Homepage";
   let roleBadge = "Public Visitor";
@@ -38,21 +34,18 @@ export default function NotFound() {
   let roleColor = "from-blue-600 to-indigo-600";
 
   if (adminToken || pathname.startsWith("/admin")) {
-    targetRole = "admin";
     targetPath = adminToken ? "/admin/dashboard" : "/admin/login";
     targetTitle = adminToken ? "Admin Dashboard" : "Admin Login";
     roleBadge = adminToken ? "Logged in as Admin" : "Admin Portal";
     roleIcon = Shield;
     roleColor = "from-indigo-600 to-purple-600";
   } else if (doctorToken || pathname.startsWith("/doctor")) {
-    targetRole = "doctor";
     targetPath = doctorToken ? "/doctor/dashboard" : "/doctor/login";
     targetTitle = doctorToken ? "Doctor Dashboard" : "Doctor Login";
     roleBadge = doctorToken ? "Logged in as Doctor" : "Doctor Portal";
     roleIcon = Stethoscope;
     roleColor = "from-teal-600 to-emerald-600";
   } else if (patientToken || pathname.startsWith("/patient")) {
-    targetRole = "patient";
     targetPath = patientToken ? "/patient/dashboard" : "/patient/login";
     targetTitle = patientToken ? "Patient Dashboard" : "Patient Login";
     roleBadge = patientToken ? "Logged in as Patient" : "Patient Portal";

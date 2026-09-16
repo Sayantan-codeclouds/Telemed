@@ -7,7 +7,6 @@ import {
   Award,
   Loader2,
   Calendar,
-  Sparkles,
   X,
   Filter,
   ArrowRight,

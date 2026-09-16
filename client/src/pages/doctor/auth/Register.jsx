@@ -10,10 +10,8 @@ import {
   Phone,
   Lock,
   ArrowRight,
-  ShieldCheck,
   CheckCircle,
   BadgeCheck,
-  Clock,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";

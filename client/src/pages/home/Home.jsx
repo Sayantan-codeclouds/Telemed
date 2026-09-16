@@ -19,11 +19,9 @@ import {
   ChevronRight,
   Send,
   MessageSquare,
-  Clock,
   BadgeCheck,
   Mic,
   Calendar,
-  Phone,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback } from "react";
 
@@ -67,28 +65,6 @@ function useCounter(target, duration = 1800, delay = 0) {
 }
 
 /* ═══════════════════════════════════════════════
-   Fade-in on scroll hook
-═══════════════════════════════════════════════ */
-function useFadeIn(delay = 0) {
-  const ref = useRef(null);
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setTimeout(() => setVisible(true), delay);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.1 }
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [delay]);
-  return [ref, visible];
-}
-
-/* ═══════════════════════════════════════════════
    StatCard
 ═══════════════════════════════════════════════ */
 function StatCard({ value, suffix = "", label, delay }) {
@@ -125,7 +101,6 @@ const SUGGESTED_DOCTORS = [
 function AIDemo() {
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
-  const [step, setStep] = useState(0);
   const [started, setStarted] = useState(false);
   const chatRef = useRef(null);
   const containerRef = useRef(null);

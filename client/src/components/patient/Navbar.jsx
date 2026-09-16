@@ -1,5 +1,4 @@
 import {
-  Bell,
   Search,
 } from "lucide-react";
 import NotificationBell from "../common/NotificationBell";

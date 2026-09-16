@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Tag,
   Gift,
@@ -12,20 +11,14 @@ import {
   Loader2,
   Percent,
   DollarSign,
-  Calendar,
-  Sparkles,
   Zap,
-  Layers,
   Copy,
   Check,
   X,
   TrendingUp,
-  CreditCard,
-  ShieldCheck,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -39,7 +32,6 @@ const COUPON_TYPES = [
 ];
 
 export default function AdminCoupons() {
-  const navigate = useNavigate();
   const { formatPrice, currencySign } = useCurrency();
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -181,7 +173,7 @@ export default function AdminCoupons() {
       toast.success(
         `Coupon ${coupon.code} is now ${newStatus === "ACTIVE" ? "🟢 ACTIVE" : "⚪ INACTIVE"}`
       );
-    } catch (error) {
+    } catch {
       toast.error("Failed to update coupon status.");
     }
   };

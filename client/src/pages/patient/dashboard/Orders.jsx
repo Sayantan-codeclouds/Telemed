@@ -13,22 +13,16 @@ import {
   MapPin,
   CreditCard,
   Tag,
-  Gift,
   Zap,
   ChevronDown,
   ChevronUp,
   RefreshCw,
   Copy,
   Check,
-  ExternalLink,
   Pill,
   Sparkles,
-  ArrowRight,
-  ShieldCheck,
-  Building,
   Receipt,
   FileText,
-  AlertCircle,
   Video,
   Stethoscope,
   CalendarDays,
@@ -36,7 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import api from "@/api/axios";
 import { downloadInvoicePdf } from "@/utils/invoiceGenerator";

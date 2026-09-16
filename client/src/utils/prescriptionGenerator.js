@@ -258,7 +258,7 @@ export const downloadPrescriptionPdf = (prescription) => {
   if (stampImage) {
     try {
       doc.addImage(stampImage, "PNG", 18, footerBoxY + 3, 30, 30);
-    } catch (e) {
+    } catch {
       // Fallback text if image format unsupported in jsPDF
       doc.setFont("helvetica", "bold");
       doc.setFontSize(7);
@@ -294,7 +294,7 @@ export const downloadPrescriptionPdf = (prescription) => {
   if (sigImage) {
     try {
       doc.addImage(sigImage, "PNG", W - 70, footerBoxY + 2, 45, 18);
-    } catch (e) {
+    } catch {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       setTextColor("#0f172a");

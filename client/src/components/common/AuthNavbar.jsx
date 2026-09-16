@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Stethoscope, ArrowLeft, Users, Shield, User } from "lucide-react";
+import { Stethoscope, ArrowLeft, Shield, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 

@@ -9,9 +9,7 @@ import {
   Pill,
   Sparkles,
   MessageSquare,
-  FileText,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 export default function ConsultationFooter({
   isAudioMuted = false,

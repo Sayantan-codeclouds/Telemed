@@ -5,23 +5,17 @@ import {
   ArrowUpRight,
   Clock,
   CheckCircle2,
-  AlertCircle,
   Building2,
   CreditCard,
   Download,
-  Calendar,
-  User,
   Search,
   Loader2,
   TrendingUp,
-  Percent,
   FileSpreadsheet,
   X,
-  Sparkles,
-  ShieldCheck,
   Smartphone,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -568,7 +562,6 @@ export default function DoctorEarnings() {
                   payouts.map((p) => {
                     const isPaid = p.status === "PAID";
                     const isPending = p.status === "PENDING" || p.status === "PROCESSING" || p.status === "APPROVED";
-                    const isRejected = p.status === "REJECTED";
 
                     return (
                       <tr key={p._id} className="hover:bg-slate-50/60 transition">

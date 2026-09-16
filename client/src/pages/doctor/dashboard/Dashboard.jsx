@@ -1,24 +1,17 @@
 import { useEffect, useState, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   Users,
   CalendarDays,
   Clock3,
   TrendingUp,
-  Star,
-  Activity,
   Video,
-  CheckCircle2,
   AlertCircle,
   Clock,
   Loader2,
   Stethoscope,
   ArrowRight,
   ShieldCheck,
-  FileText,
-  UserCheck,
-  DollarSign,
-  Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +31,6 @@ const getSafeStoredDoctor = () => {
 };
 
 export default function DoctorDashboard() {
-  const navigate = useNavigate();
   const { formatPrice, currencySign } = useCurrency();
   const [profile, setProfile] = useState(null);
   const [appointments, setAppointments] = useState([]);

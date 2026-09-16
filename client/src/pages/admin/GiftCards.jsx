@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Gift,
   Search,
@@ -10,14 +10,10 @@ import {
   Loader2,
   DollarSign,
   Calendar,
-  Sparkles,
-  Zap,
   Copy,
   Check,
   X,
   RefreshCw,
-  Clock,
-  ShieldCheck,
   AlertTriangle,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -226,8 +222,6 @@ export default function AdminGiftCards() {
 
   const activeCount = giftCards.filter((c) => c.isActive).length;
   const totalIssued = giftCards.reduce((sum, c) => sum + (c.totalAmount || 0), 0);
-  const totalBalance = giftCards.reduce((sum, c) => sum + (c.balanceAmount || 0), 0);
-
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
       {/* Header */}

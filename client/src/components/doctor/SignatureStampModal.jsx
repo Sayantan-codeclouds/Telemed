@@ -10,11 +10,8 @@ import {
   Building2,
   Sparkles,
   ShieldCheck,
-  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import doctorApi from "@/api/doctorApi";
@@ -36,7 +33,7 @@ export default function SignatureStampModal({
   // HTML5 Canvas for drawing
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [hasDrawn, setHasDrawn] = useState(false);
+  const [, setHasDrawn] = useState(false);
 
   // Sync with doctor prop changes
   useEffect(() => {

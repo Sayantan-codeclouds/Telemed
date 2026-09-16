@@ -1,34 +1,22 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   LifeBuoy,
   Search,
   CheckCircle2,
   Clock,
   RefreshCw,
-  AlertCircle,
-  XCircle,
   User,
   Stethoscope,
   Mail,
   Phone,
   MessageSquare,
-  Sparkles,
   Send,
   Trash2,
-  Filter,
-  ExternalLink,
-  ChevronDown,
-  ChevronUp,
-  Tag,
-  ShieldAlert,
   Loader2,
-  Check,
-  Building,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import adminApi from "@/api/adminApi";
 
@@ -76,7 +64,6 @@ export default function AdminSupportTickets() {
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [selectedSender, setSelectedSender] = useState("ALL");
-  const [selectedTicket, setSelectedTicket] = useState(null);
 
   // Resolution modal state
   const [resolvingId, setResolvingId] = useState(null);
@@ -145,7 +132,7 @@ export default function AdminSupportTickets() {
       await adminApi.delete(`/support/admin/tickets/${ticketId}`);
       toast.success("Support ticket deleted.");
       fetchTickets();
-    } catch (err) {
+    } catch {
       toast.error("Failed to delete support ticket.");
     }
   };
