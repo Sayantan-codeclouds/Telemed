@@ -3,7 +3,7 @@ import Appointment from "../appointments/appointment.model.js";
 import Doctor from "../doctors/doctor.model.js";
 import AppError from "../shared/errors/AppError.js";
 import { createNotificationService } from "../notifications/notification.service.js";
-import { sendRecheckupReminderEmail } from "../mail/mail.service.js";
+import { sendRecheckupReminderEmail, getEffectiveFrontendUrl } from "../mail/mail.service.js";
 
 export const createPrescriptionService = async (doctorId, data) => {
   const appointment = await Appointment.findById(data.appointmentId);
@@ -125,7 +125,7 @@ export const triggerRecheckupReminderService = async (prescriptionId, user = nul
         diagnosis: prescription.diagnosis,
         validityDays: prescription.validityDays || 14,
         recheckupDate: formattedDate,
-        bookingUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/patient/doctors`,
+        bookingUrl: `${await getEffectiveFrontendUrl()}/patient/doctors`,
       });
       emailSent = true;
     } catch (emailErr) {

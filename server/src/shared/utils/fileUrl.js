@@ -18,8 +18,42 @@ export const getProfileImageFilename = (value) => {
   );
 };
 
+const APP_URL_CACHE_TTL_MS = 60_000;
+let cachedAppUrl = null;
+let cachedAppUrlAt = 0;
+let refreshInFlight = null;
+
+const refreshAppUrlCache = () => {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = import("../../pharmacy/vrio.service.js")
+    .then(({ getCrmSettingsService }) => getCrmSettingsService())
+    .then((settings) => {
+      cachedAppUrl = settings?.appUrl?.trim() || null;
+    })
+    .catch(() => {
+      // Ignore lookup failure; env var fallback still applies below.
+    })
+    .finally(() => {
+      cachedAppUrlAt = Date.now();
+      refreshInFlight = null;
+    });
+
+  return refreshInFlight;
+};
+
+/**
+ * Resolves the active backend/app domain dynamically from CRM settings or environment.
+ * Stays synchronous (many call sites format images without awaiting) by serving the
+ * last-known DB value and refreshing it in the background on a short TTL.
+ */
 export const getEffectiveAppUrl = () => {
+  if (Date.now() - cachedAppUrlAt > APP_URL_CACHE_TTL_MS) {
+    refreshAppUrlCache();
+  }
+
   return (
+    cachedAppUrl ||
     process.env.APP_URL ||
     process.env.RENDER_EXTERNAL_URL ||
     (process.env.NODE_ENV === "production" ? "https://telemed-zuls.onrender.com" : "http://localhost:5000")
