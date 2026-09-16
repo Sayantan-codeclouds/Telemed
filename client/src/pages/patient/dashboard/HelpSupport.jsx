@@ -1,29 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   LifeBuoy,
   Mail,
-  Phone,
   Clock,
   Send,
   CheckCircle2,
-  AlertCircle,
-  Clock3,
   MessageSquare,
   Sparkles,
-  HelpCircle,
-  FileText,
   Loader2,
   RefreshCw,
-  Tag,
-  ShieldCheck,
-  ChevronDown,
-  ChevronUp,
+  Inbox,
+  Flame,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import api from "@/api/axios";
 
@@ -65,11 +57,26 @@ const STATUS_CONFIG = {
   },
 };
 
+const PRIORITY_CONFIG = {
+  LOW: "bg-slate-100 text-slate-600 border-slate-200",
+  MEDIUM: "bg-blue-50 text-blue-700 border-blue-200",
+  HIGH: "bg-orange-50 text-orange-700 border-orange-200",
+  URGENT: "bg-rose-50 text-rose-700 border-rose-200",
+};
+
+const FILTERS = [
+  { key: "ALL", label: "All" },
+  { key: "OPEN", label: "Open" },
+  { key: "IN_PROGRESS", label: "In Progress" },
+  { key: "SOLVED", label: "Solved" },
+  { key: "CLOSED", label: "Closed" },
+];
+
 export default function PatientHelpSupport() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [expandedTickets, setExpandedTickets] = useState({});
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
   const patient = JSON.parse(localStorage.getItem("patient") || "{}");
 
@@ -112,6 +119,21 @@ export default function PatientHelpSupport() {
     fetchTickets();
     fetchSettings();
   }, []);
+
+  const stats = useMemo(
+    () => ({
+      total: tickets.length,
+      open: tickets.filter((t) => t.status === "OPEN").length,
+      inProgress: tickets.filter((t) => t.status === "IN_PROGRESS").length,
+      solved: tickets.filter((t) => t.status === "SOLVED").length,
+    }),
+    [tickets]
+  );
+
+  const filteredTickets = useMemo(
+    () => (statusFilter === "ALL" ? tickets : tickets.filter((t) => t.status === statusFilter)),
+    [tickets, statusFilter]
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -306,10 +328,71 @@ export default function PatientHelpSupport() {
             </Button>
           </div>
 
+          {/* Stats Strip */}
+          <div className="grid grid-cols-3 gap-2.5">
+            <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+              <div className="flex items-center gap-1.5 text-slate-400">
+                <Inbox className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Open</span>
+              </div>
+              <p className="text-xl font-black text-amber-600 mt-1">{stats.open}</p>
+            </div>
+            <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+              <div className="flex items-center gap-1.5 text-slate-400">
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">In Review</span>
+              </div>
+              <p className="text-xl font-black text-blue-600 mt-1">{stats.inProgress}</p>
+            </div>
+            <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+              <div className="flex items-center gap-1.5 text-slate-400">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Solved</span>
+              </div>
+              <p className="text-xl font-black text-emerald-600 mt-1">{stats.solved}</p>
+            </div>
+          </div>
+
+          {/* Status Filter Pills */}
+          {tickets.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setStatusFilter(f.key)}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition cursor-pointer ${
+                    statusFilter === f.key
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-600/20"
+                      : "bg-white text-slate-500 border-slate-200 hover:border-indigo-200 hover:text-indigo-600"
+                  }`}
+                >
+                  {f.label}
+                  {f.key !== "ALL" && (
+                    <span className="ml-1 opacity-70">
+                      ({tickets.filter((t) => t.status === f.key).length})
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
           {loading ? (
-            <div className="py-16 text-center">
-              <Loader2 className="w-7 h-7 animate-spin text-indigo-600 mx-auto" />
-              <p className="text-xs text-slate-500 mt-2 font-medium">Loading your tickets...</p>
+            <div className="space-y-3">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="p-4 sm:p-5 rounded-2xl border border-slate-200/80 bg-white space-y-3 animate-pulse"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="h-4 w-24 bg-slate-100 rounded" />
+                    <div className="h-5 w-20 bg-slate-100 rounded-full" />
+                  </div>
+                  <div className="h-3.5 w-3/4 bg-slate-100 rounded" />
+                  <div className="h-10 w-full bg-slate-100 rounded-xl" />
+                </div>
+              ))}
             </div>
           ) : tickets.length === 0 ? (
             <Card className="p-8 text-center border-dashed border-2 rounded-3xl bg-slate-50/60 space-y-2">
@@ -319,11 +402,16 @@ export default function PatientHelpSupport() {
                 Any tickets you submit will appear here with live resolution updates from our admin team.
               </p>
             </Card>
+          ) : filteredTickets.length === 0 ? (
+            <Card className="p-6 text-center border-dashed border-2 rounded-3xl bg-slate-50/60 space-y-1">
+              <p className="text-sm font-bold text-slate-700">No tickets in this status</p>
+              <p className="text-xs text-slate-400">Try a different filter above.</p>
+            </Card>
           ) : (
             <div className="space-y-3">
-              {tickets.map((t) => {
+              {filteredTickets.map((t) => {
                 const statusMeta = STATUS_CONFIG[t.status] || STATUS_CONFIG.OPEN;
-                const StatusIcon = statusMeta.icon;
+                const priorityClass = PRIORITY_CONFIG[t.priority] || PRIORITY_CONFIG.MEDIUM;
 
                 return (
                   <Card
@@ -352,6 +440,14 @@ export default function PatientHelpSupport() {
                       <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">
                         {t.category}
                       </span>
+                      {t.priority === "URGENT" || t.priority === "HIGH" ? (
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold border ${priorityClass}`}
+                        >
+                          <Flame className="w-2.5 h-2.5" />
+                          {t.priority}
+                        </span>
+                      ) : null}
                       <span>•</span>
                       <span>
                         {new Date(t.createdAt).toLocaleDateString("en-US", {

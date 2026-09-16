@@ -1,29 +1,22 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
-  Stethoscope,
   Building2,
   Award,
-  Calendar as CalendarIcon,
   Clock,
   Video,
   ShieldCheck,
   CheckCircle2,
   ArrowLeft,
   Loader2,
-  Sparkles,
-  HeartPulse,
-  Info,
   CreditCard,
   FileText,
-  ChevronRight,
   AlertCircle,
   Star,
   ThumbsUp,
   MessageSquare,
   Tag,
   X,
-  Percent,
   Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -92,7 +85,7 @@ export const detectCardNetwork = (num) => {
 export default function DoctorDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { currencySign, formatPrice } = useCurrency();
+  const { formatPrice } = useCurrency();
 
   const [doctor, setDoctor] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1064,7 +1057,7 @@ export default function DoctorDetails() {
                 </label>
                 <div className="relative">
                   <Input
-                    placeholder="4111 2222 3333 4444"
+                    placeholder="Credit Card Number"
                     value={paymentForm.cardNumber}
                     onChange={handleCardNumberChange}
                     maxLength={19}
@@ -1081,7 +1074,7 @@ export default function DoctorDetails() {
                     Exp Month
                   </label>
                   <Input
-                    placeholder="MM (08)"
+                    placeholder="MM"
                     value={paymentForm.cardExpMonth}
                     onChange={(e) =>
                       setPaymentForm((prev) => ({
@@ -1098,7 +1091,7 @@ export default function DoctorDetails() {
                     Exp Year
                   </label>
                   <Input
-                    placeholder="YY (28)"
+                    placeholder="YYYY"
                     value={paymentForm.cardExpYear}
                     onChange={(e) =>
                       setPaymentForm((prev) => ({
@@ -1116,7 +1109,7 @@ export default function DoctorDetails() {
                   </label>
                   <Input
                     type="password"
-                    placeholder="123"
+                    placeholder="CVV"
                     value={paymentForm.cardCvv}
                     onChange={(e) =>
                       setPaymentForm((prev) => ({

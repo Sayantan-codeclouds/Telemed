@@ -10,19 +10,14 @@ import {
   Clock,
   MapPin,
   User,
-  Phone,
   Mail,
-  ExternalLink,
   ChevronRight,
   Receipt,
-  FileText,
   Plus,
   Trash2,
   CreditCard,
   Pill,
   X,
-  AlertCircle,
-  Building2,
   Video,
   Stethoscope,
 } from "lucide-react";
@@ -1090,7 +1085,7 @@ export default function AdminOrders() {
                         </Label>
                         <div className="space-y-2 text-xs">
                           <Input
-                            placeholder="Card Number (e.g. 4111 2222 3333 4444)"
+                            placeholder="Credit Card Number"
                             value={paymentDetails.cardNumber}
                             onChange={(e) =>
                               setPaymentDetails({ ...paymentDetails, cardNumber: e.target.value })
