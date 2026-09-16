@@ -1,4 +1,6 @@
 import SupportTicket from "./support.model.js";
+import Doctor from "../doctors/doctor.model.js";
+import Patient from "../patients/patient.model.js";
 import AppError from "../shared/errors/AppError.js";
 import {
   sendSupportTicketCreatedEmail,
@@ -57,6 +59,26 @@ export const createSupportTicketService = async (data, user, userType = "Guest")
       senderType = "Admin";
       senderName = senderName || "Admin Support";
       senderEmail = senderEmail || user.email;
+    }
+  } else if (senderEmail) {
+    // Auto-link to existing Doctor or Patient by email if unauthenticated
+    try {
+      const existingDoctor = await Doctor.findOne({ email: senderEmail });
+      if (existingDoctor) {
+        senderType = "Doctor";
+        doctorId = existingDoctor._id;
+        if (!senderName || senderName === "Support Requester") {
+          senderName = `Dr. ${existingDoctor.firstName || ""} ${existingDoctor.lastName || ""}`.trim();
+        }
+      } else {
+        const existingPatient = await Patient.findOne({ email: senderEmail });
+        if (existingPatient) {
+          senderType = "Patient";
+          patientId = existingPatient._id;
+        }
+      }
+    } catch {
+      // Ignore lookup failure
     }
   }
 

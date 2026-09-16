@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import Patient from "../patients/patient.model.js";
 import Doctor from "../doctors/doctor.model.js";
 import { authenticateAdmin } from "../admin/admin.middleware.js";
+import { authenticateDoctor } from "../doctors/doctor.middleware.js";
 import {
   submitSupportTicket,
   getMySupportTickets,
@@ -77,6 +78,10 @@ const requirePatientOrDoctorAuth = async (req, res, next) => {
 // ── Patient & Doctor Routes ──
 router.post("/submit", optionalAuth, submitSupportTicket);
 router.get("/my-tickets", requirePatientOrDoctorAuth, getMySupportTickets);
+
+// ── Doctor-Authenticated Routes (ensures doctor is always properly identified) ──
+router.post("/doctor/submit", authenticateDoctor, submitSupportTicket);
+router.get("/doctor/my-tickets", authenticateDoctor, getMySupportTickets);
 
 // ── Admin Routes ──
 router.get("/admin/tickets", authenticateAdmin, getAllSupportTicketsAdmin);
