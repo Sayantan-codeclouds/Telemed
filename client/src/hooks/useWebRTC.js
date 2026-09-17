@@ -272,8 +272,11 @@ export default function useWebRTC(roomId, user) {
             } catch {}
           }
         });
-        // Trigger negotiation if new tracks were added
-        if (added || !isPolite) {
+        // Trigger negotiation if new tracks were added. Only the impolite
+        // peer (doctor) may create offers — a polite peer initiating its own
+        // offer collides with perfect negotiation and can leave connectionStatus
+        // stuck at "connecting" since it never gets answered.
+        if (added && !isPolite) {
           setTimeout(() => initiateOffer(), 300);
         }
       }
@@ -312,17 +315,24 @@ export default function useWebRTC(roomId, user) {
       const pc = pcRef.current;
       if (pc) {
         const senders = pc.getSenders();
+        let added = false;
         stream.getTracks().forEach((track) => {
           const sender = senders.find((s) => s.track?.kind === track.kind);
-          if (sender) sender.replaceTrack(track);
-          else pc.addTrack(track, stream);
+          if (sender) {
+            sender.replaceTrack(track);
+          } else {
+            pc.addTrack(track, stream);
+            added = true;
+          }
         });
-        setTimeout(() => initiateOffer(), 300);
+        if (added && !isPolite) {
+          setTimeout(() => initiateOffer(), 300);
+        }
       }
     } catch (err) {
       console.warn("Retry camera failed:", err.message);
     }
-  }, [initiateOffer]);
+  }, [initiateOffer, isPolite]);
 
   // ─── 3. PEER CONNECTION + SIGNALING ───────────────────────────────────────
   useEffect(() => {
@@ -367,8 +377,12 @@ export default function useWebRTC(roomId, user) {
 
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
+      // "connecting" is intentionally not handled here: it is already signaled
+      // at negotiation start by initiateOffer()/handleVideoOffer(), and the
+      // aggregate connectionState can transiently report "connecting" again
+      // even after real media is already flowing, which would otherwise
+      // permanently downgrade an already-live "connected" status.
       if (s === "connected") setConnectionStatus("connected");
-      else if (s === "connecting") setConnectionStatus("connecting");
       else if (s === "disconnected") {
         setConnectionStatus("disconnected");
         // Try ICE restart after brief disconnection
@@ -401,8 +415,15 @@ export default function useWebRTC(roomId, user) {
     const handleRoomJoined = ({ othersPresent }) => {
       if (!isPolite && othersPresent > 0) {
         // Doctor arrived AFTER Patient — initiate offer after a short delay
-        // to allow media tracks to be attached first
-        setTimeout(() => initiateOffer(), 500);
+        // to allow media tracks to be attached first. Skip if the local-media
+        // effect's own catch-up offer already connected us in the meantime —
+        // otherwise this redundant renegotiation leaves the remote peer's
+        // connectionStatus stuck at "connecting" with nothing to correct it.
+        setTimeout(() => {
+          if (pcRef.current?.connectionState !== "connected") {
+            initiateOffer();
+          }
+        }, 500);
       }
     };
 
@@ -411,7 +432,11 @@ export default function useWebRTC(roomId, user) {
       if (!isPolite) {
         // Doctor always creates offer when anyone new joins
         // Use longer delay to avoid double-offer with room-joined
-        setTimeout(() => initiateOffer(), 600);
+        setTimeout(() => {
+          if (pcRef.current?.connectionState !== "connected") {
+            initiateOffer();
+          }
+        }, 600);
       }
     };
 
