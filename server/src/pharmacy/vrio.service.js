@@ -1,6 +1,7 @@
 import vrioApi from "@api/vrio-api";
 import { CrmSettings } from "./crmSettings.model.js";
 import { incrementCouponUsageService } from "../coupons/coupon.service.js";
+import { DEFAULT_SUPPORT_EMAIL, DEFAULT_MAIL_FROM } from "../shared/constants/defaults.js";
 
 const DEFAULT_SETTINGS = {
   apiKey: "",
@@ -15,15 +16,15 @@ const DEFAULT_SETTINGS = {
   consultationItemId: 3366,
   consultationOfferId: 29,
   currencySign: "$",
-  supportEmail: "sayantan.das@codeclouds.com",
-  doctorSupportEmail: "sayantan.das@codeclouds.com",
+  supportEmail: DEFAULT_SUPPORT_EMAIL,
+  doctorSupportEmail: DEFAULT_SUPPORT_EMAIL,
   isEnabled: true,
   isTestMode: false,
   resendApiKey: "",
-  resendFromEmail: "TeleClinic Support <noreply@sayantandas.in>",
+  resendFromEmail: DEFAULT_MAIL_FROM,
   mailProvider: "resend",
   mailApiKey: "",
-  mailFromEmail: "TeleClinic Support <noreply@sayantandas.in>",
+  mailFromEmail: DEFAULT_MAIL_FROM,
   smtpHost: "",
   smtpPort: 587,
   smtpUser: "",
@@ -79,11 +80,11 @@ export const getCrmSettingsService = async () => {
   // Ensure defaults if unset in older records
   if (!settings.consultationItemId) settings.consultationItemId = 3366;
   if (!settings.consultationOfferId) settings.consultationOfferId = 29;
-  if (!settings.supportEmail) settings.supportEmail = "sayantan.das@codeclouds.com";
-  if (!settings.doctorSupportEmail) settings.doctorSupportEmail = "sayantan.das@codeclouds.com";
-  if (!settings.resendFromEmail) settings.resendFromEmail = "TeleClinic Support <noreply@sayantandas.in>";
+  if (!settings.supportEmail) settings.supportEmail = DEFAULT_SUPPORT_EMAIL;
+  if (!settings.doctorSupportEmail) settings.doctorSupportEmail = DEFAULT_SUPPORT_EMAIL;
+  if (!settings.resendFromEmail) settings.resendFromEmail = DEFAULT_MAIL_FROM;
   if (!settings.mailProvider) settings.mailProvider = "resend";
-  if (!settings.mailFromEmail) settings.mailFromEmail = settings.resendFromEmail || "TeleClinic Support <noreply@sayantandas.in>";
+  if (!settings.mailFromEmail) settings.mailFromEmail = settings.resendFromEmail || DEFAULT_MAIL_FROM;
   if (settings.resendApiKey && !settings.mailApiKey) settings.mailApiKey = settings.resendApiKey;
   if (settings.mailApiKey && !settings.resendApiKey && settings.mailProvider === "resend") settings.resendApiKey = settings.mailApiKey;
   if (settings.smtpPort === undefined || settings.smtpPort === null) settings.smtpPort = 587;
@@ -133,8 +134,8 @@ export const updateCrmSettingsService = async (data) => {
     settings.consultationCampaignId = data.consultationCampaignId ? Number(data.consultationCampaignId) : null;
   }
   if (data.currencySign !== undefined) settings.currencySign = data.currencySign.trim() || "$";
-  if (data.supportEmail !== undefined) settings.supportEmail = data.supportEmail.trim() || "sayantan.das@codeclouds.com";
-  if (data.doctorSupportEmail !== undefined) settings.doctorSupportEmail = data.doctorSupportEmail.trim() || "sayantan.das@codeclouds.com";
+  if (data.supportEmail !== undefined) settings.supportEmail = data.supportEmail.trim() || DEFAULT_SUPPORT_EMAIL;
+  if (data.doctorSupportEmail !== undefined) settings.doctorSupportEmail = data.doctorSupportEmail.trim() || DEFAULT_SUPPORT_EMAIL;
   if (data.isEnabled !== undefined) settings.isEnabled = Boolean(data.isEnabled);
   if (data.isTestMode !== undefined) settings.isTestMode = Boolean(data.isTestMode);
   if (data.resendApiKey !== undefined) settings.resendApiKey = data.resendApiKey.trim();

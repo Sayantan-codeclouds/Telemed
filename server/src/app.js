@@ -1,4 +1,5 @@
 import express from "express";
+import { DEFAULT_SUPPORT_EMAIL } from "./shared/constants/defaults.js";
 import cors from "cors";
 import path from "path";
 import helmet from "helmet";
@@ -148,8 +149,8 @@ app.get("/api/settings", async (req, res) => {
       success: true,
       data: {
         currencySign: settings.currencySign || "$",
-        supportEmail: settings.supportEmail || "sayantan.das@codeclouds.com",
-        doctorSupportEmail: settings.doctorSupportEmail || "sayantan.das@codeclouds.com",
+        supportEmail: settings.supportEmail || DEFAULT_SUPPORT_EMAIL,
+        doctorSupportEmail: settings.doctorSupportEmail || DEFAULT_SUPPORT_EMAIL,
         isEnabled: settings.isEnabled,
       },
     });
@@ -158,8 +159,8 @@ app.get("/api/settings", async (req, res) => {
       success: true,
       data: {
         currencySign: "$",
-        supportEmail: "sayantan.das@codeclouds.com",
-        doctorSupportEmail: "sayantan.das@codeclouds.com",
+        supportEmail: DEFAULT_SUPPORT_EMAIL,
+        doctorSupportEmail: DEFAULT_SUPPORT_EMAIL,
       },
     });
   }

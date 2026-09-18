@@ -9,6 +9,7 @@ import {
 } from "../mail/mail.service.js";
 import { getCrmSettingsService } from "../pharmacy/vrio.service.js";
 import { createNotificationService } from "../notifications/notification.service.js";
+import { DEFAULT_SUPPORT_EMAIL } from "../shared/constants/defaults.js";
 
 /**
  * Generate human-readable ticket ID e.g. TIC-849201
@@ -107,7 +108,7 @@ export const createSupportTicketService = async (data, user, userType = "Guest")
   });
 
   // Fetch admin configured support email
-  let adminSupportEmail = "sayantan.das@codeclouds.com";
+  let adminSupportEmail = DEFAULT_SUPPORT_EMAIL;
   try {
     const settings = await getCrmSettingsService();
     if (senderType === "Doctor" && settings?.doctorSupportEmail) {
@@ -116,7 +117,7 @@ export const createSupportTicketService = async (data, user, userType = "Guest")
       adminSupportEmail = settings.supportEmail;
     }
   } catch {
-    adminSupportEmail = "sayantan.das@codeclouds.com";
+    adminSupportEmail = DEFAULT_SUPPORT_EMAIL;
   }
 
   // 1. Non-blocking confirmation email to User/Submitter

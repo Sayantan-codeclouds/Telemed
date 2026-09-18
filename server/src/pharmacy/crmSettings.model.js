@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { DEFAULT_SUPPORT_EMAIL, DEFAULT_MAIL_FROM } from "../shared/constants/defaults.js";
 
 const crmSettingsSchema = new mongoose.Schema(
   {
@@ -161,12 +162,12 @@ const crmSettingsSchema = new mongoose.Schema(
     },
     supportEmail: {
       type: String,
-      default: "sayantan.das@codeclouds.com",
+      default: DEFAULT_SUPPORT_EMAIL,
       trim: true,
     },
     doctorSupportEmail: {
       type: String,
-      default: "sayantan.das@codeclouds.com",
+      default: DEFAULT_SUPPORT_EMAIL,
       trim: true,
     },
     isEnabled: {
@@ -184,7 +185,7 @@ const crmSettingsSchema = new mongoose.Schema(
     },
     resendFromEmail: {
       type: String,
-      default: "TeleClinic Support <noreply@sayantandas.in>",
+      default: DEFAULT_MAIL_FROM,
       trim: true,
     },
     // Multi-provider email configuration
@@ -201,7 +202,7 @@ const crmSettingsSchema = new mongoose.Schema(
     },
     mailFromEmail: {
       type: String,
-      default: "TeleClinic Support <noreply@sayantandas.in>",
+      default: DEFAULT_MAIL_FROM,
       trim: true,
     },
     smtpHost: {

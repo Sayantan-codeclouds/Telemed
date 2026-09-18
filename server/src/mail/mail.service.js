@@ -8,6 +8,7 @@ import {
   orderInvoiceEmailTemplate,
 } from "./mail.templates.js";
 import { getCrmSettingsService } from "../pharmacy/vrio.service.js";
+import { DEFAULT_SUPPORT_EMAIL, DEFAULT_MAIL_FROM } from "../shared/constants/defaults.js";
 
 const PostmarkClient = postmarkPkg.ServerClient || postmarkPkg.default?.ServerClient || postmarkPkg;
 
@@ -18,7 +19,7 @@ const PostmarkClient = postmarkPkg.ServerClient || postmarkPkg.default?.ServerCl
 export async function getMailConfig() {
   let provider = "resend";
   let apiKey = "";
-  let mailFrom = "TeleClinic Support <noreply@sayantandas.in>";
+  let mailFrom = DEFAULT_MAIL_FROM;
   let smtp = {
     host: "",
     port: 587,
@@ -70,10 +71,6 @@ export async function getMailConfig() {
     } else if (provider === "postmark" && process.env.POSTMARK_SERVER_TOKEN) {
       apiKey = process.env.POSTMARK_SERVER_TOKEN.trim();
     }
-  }
-
-  if (mailFrom === "TeleClinic Support <noreply@sayantandas.in>" && process.env.MAIL_FROM) {
-    mailFrom = process.env.MAIL_FROM.trim();
   }
 
   return { provider, apiKey, mailFrom, smtp };
@@ -445,7 +442,7 @@ export const sendSupportTicketCreatedEmail = async ({
  * Alert admin about a new support ticket
  */
 export const sendAdminSupportTicketAlertEmail = async ({
-  adminEmail = "sayantan.das@codeclouds.com",
+  adminEmail = DEFAULT_SUPPORT_EMAIL,
   ticketId,
   name,
   senderEmail,
@@ -574,7 +571,7 @@ export const sendOrderInvoiceEmail = async (order) => {
   try {
     const settings = await getCrmSettingsService();
     const currencySign = settings?.currencySign || "$";
-    const supportEmail = settings?.supportEmail || "sayantan.das@codeclouds.com";
+    const supportEmail = settings?.supportEmail || DEFAULT_SUPPORT_EMAIL;
 
     // Resolve recipient email: check patient.email first, then billingDetails.email
     const recipientEmail =

@@ -21,11 +21,13 @@ const ICE_SERVERS = {
       username: "openrelayproject",
       credential: "openrelayproject",
     },
-    // FreeICE TURN (backup)
+    // Metered.ca TURN (backup) — configurable via env so the credential can
+    // be rotated without a code change; falls back to the original account
+    // if not set.
     {
       urls: "turn:relay.metered.ca:80",
-      username: "e8dd65f0f7c7f814e18e7c25",
-      credential: "uPmUCJkzqFNz0f9Q",
+      username: import.meta.env.VITE_TURN_USERNAME || "e8dd65f0f7c7f814e18e7c25",
+      credential: import.meta.env.VITE_TURN_CREDENTIAL || "uPmUCJkzqFNz0f9Q",
     },
   ],
   iceCandidatePoolSize: 10,

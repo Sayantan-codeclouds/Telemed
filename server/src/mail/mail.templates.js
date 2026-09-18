@@ -1,3 +1,5 @@
+import { DEFAULT_SUPPORT_EMAIL } from "../shared/constants/defaults.js";
+
 export const verificationEmailTemplate = (
   firstName,
   verificationLink
@@ -93,7 +95,7 @@ export const orderInvoiceEmailTemplate = ({
   order,
   patientName,
   currencySign = "$",
-  supportEmail = "sayantan.das@codeclouds.com",
+  supportEmail = DEFAULT_SUPPORT_EMAIL,
   orderRef,
   frontendUrl = "http://localhost:5173",
 }) => {
