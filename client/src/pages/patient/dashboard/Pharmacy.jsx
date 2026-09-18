@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Pill,
   Search,
@@ -87,11 +88,8 @@ export const detectCardNetwork = (num) => {
 };
 
 export default function Pharmacy() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("store"); // "store" or "orders"
-  const [medicines, setMedicines] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [prescriptions, setPrescriptions] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [search, setSearch] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -108,7 +106,6 @@ export default function Pharmacy() {
 
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
-  const [currencySign, setCurrencySign] = useState("$");
 
   // Coupon State
   const [couponCodeInput, setCouponCodeInput] = useState("");
@@ -146,69 +143,57 @@ export default function Pharmacy() {
     localStorage.setItem("pharmacyCart", JSON.stringify(cart));
   }, [cart]);
 
-  const fetchSettings = async () => {
-    try {
+  const { data: currencySign = "$" } = useQuery({
+    queryKey: ["pharmacy-settings-currency"],
+    queryFn: async () => {
       const { data } = await api.get("/pharmacy/settings");
-      if (data?.data?.currencySign) {
-        setCurrencySign(data.data.currencySign);
-      }
-    } catch {
-      // fallback default $
-    }
-  };
+      return data?.data?.currencySign || "$";
+    },
+  });
 
-  const fetchMedicines = async () => {
-    try {
-      setLoading(true);
+  const {
+    data: medicines = [],
+    isFetching: loadingMedicines,
+    refetch: fetchMedicines,
+  } = useQuery({
+    // `search` is intentionally excluded: search only re-fetches on explicit submit.
+    queryKey: ["patient-medicines", selectedCategory],
+    queryFn: async () => {
       const params = {};
       if (selectedCategory !== "All") params.category = selectedCategory;
       if (search.trim()) params.search = search.trim();
 
       const { data } = await api.get("/pharmacy/medicines", { params });
-      setMedicines(data?.data || []);
       if (data?.currencySign) {
-        setCurrencySign(data.currencySign);
+        queryClient.setQueryData(["pharmacy-settings-currency"], data.currencySign);
       }
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to load medicines.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return data?.data || [];
+    },
+    enabled: activeTab === "store",
+    meta: { errorMessage: "Failed to load medicines." },
+  });
 
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
+  const { data: orders = [], isFetching: loadingOrders } = useQuery({
+    queryKey: ["patient-pharmacy-orders"],
+    queryFn: async () => {
       const { data } = await api.get("/pharmacy/orders/my-orders");
-      setOrders(data?.data || []);
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to load orders.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return data?.data || [];
+    },
+    enabled: activeTab !== "store",
+    meta: { errorMessage: "Failed to load orders." },
+  });
 
-  const fetchPrescriptions = async () => {
-    try {
+  const { data: prescriptions = [] } = useQuery({
+    queryKey: ["patient-prescriptions"],
+    queryFn: async () => {
       const { data } = await api.get("/prescriptions/patient");
-      setPrescriptions(data?.data || []);
-    } catch (err) {
-      console.error("Failed to load prescriptions:", err);
-    }
-  };
+      return data?.data || [];
+    },
+    enabled: activeTab === "store",
+    meta: { onError: (err) => console.error("Failed to load prescriptions:", err) },
+  });
 
-  useEffect(() => {
-    fetchSettings();
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === "store") {
-      fetchMedicines();
-      fetchPrescriptions();
-    } else {
-      fetchOrders();
-    }
-  }, [activeTab, selectedCategory]);
+  const loading = activeTab === "store" ? loadingMedicines : loadingOrders;
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();

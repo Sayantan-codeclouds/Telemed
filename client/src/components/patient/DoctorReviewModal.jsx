@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Star,
   X,
@@ -48,8 +48,11 @@ export default function DoctorReviewModal({
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Pre-fill if editing existing review
-  useEffect(() => {
+  // Pre-fill if editing existing review — adjusted during render (tracking
+  // the last [existingReview, isOpen] combo) instead of via an effect.
+  const [seededFrom, setSeededFrom] = useState({ existingReview, isOpen });
+  if (existingReview !== seededFrom.existingReview || isOpen !== seededFrom.isOpen) {
+    setSeededFrom({ existingReview, isOpen });
     if (existingReview) {
       setRating(existingReview.rating || 5);
       setReview(existingReview.review || "");
@@ -68,7 +71,7 @@ export default function DoctorReviewModal({
       ]);
       setIsAnonymous(false);
     }
-  }, [existingReview, isOpen]);
+  }
 
   if (!isOpen || !doctor) return null;
 

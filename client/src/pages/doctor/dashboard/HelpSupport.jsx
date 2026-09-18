@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   LifeBuoy,
   Mail,
@@ -72,8 +73,6 @@ const FILTERS = [
 ];
 
 export default function DoctorHelpSupport() {
-  const [tickets, setTickets] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [statusFilter, setStatusFilter] = useState("ALL");
 
@@ -89,35 +88,26 @@ export default function DoctorHelpSupport() {
     message: "",
   });
 
-  const [doctorSupportEmail, setDoctorSupportEmail] = useState("sayantan.das@codeclouds.com");
-
-  const fetchSettings = async () => {
-    try {
+  const { data: doctorSupportEmail = "support@teleclinic.com" } = useQuery({
+    queryKey: ["doctor-support-settings"],
+    queryFn: async () => {
       const { data } = await doctorApi.get("/settings");
-      if (data?.data?.doctorSupportEmail || data?.data?.supportEmail) {
-        setDoctorSupportEmail(data.data.doctorSupportEmail || data.data.supportEmail);
-      }
-    } catch {
-      // fallback
-    }
-  };
+      return data?.data?.doctorSupportEmail || data?.data?.supportEmail || "support@teleclinic.com";
+    },
+  });
 
-  const fetchTickets = async () => {
-    try {
-      setLoading(true);
+  const {
+    data: tickets = [],
+    isLoading: loading,
+    refetch: fetchTickets,
+  } = useQuery({
+    queryKey: ["doctor-my-tickets"],
+    queryFn: async () => {
       const { data } = await doctorApi.get("/support/doctor/my-tickets");
-      setTickets(data?.data || []);
-    } catch (err) {
-      console.error("Failed to load doctor tickets:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTickets();
-    fetchSettings();
-  }, []);
+      return data?.data || [];
+    },
+    meta: { onError: (err) => console.error("Failed to load doctor tickets:", err) },
+  });
 
   const stats = useMemo(
     () => ({

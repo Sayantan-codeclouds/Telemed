@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Mail,
   Phone,
@@ -25,48 +26,50 @@ import EditDoctorProfileDrawer from "@/components/doctor/EditDoctorProfileDrawer
 import SignatureStampModal from "@/components/doctor/SignatureStampModal";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
+const DOCTOR_PROFILE_QUERY_KEY = ["doctor-own-profile"];
+
 export default function DoctorProfile() {
   const { formatPrice } = useCurrency();
-  const [doctor, setDoctor] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [openEdit, setOpenEdit] = useState(false);
   const [openSignatureModal, setOpenSignatureModal] = useState(false);
 
   // Reviews state
-  const [reviews, setReviews] = useState([]);
-  const [loadingReviews, setLoadingReviews] = useState(true);
   const [replyInputs, setReplyInputs] = useState({});
   const [submittingReplyId, setSubmittingReplyId] = useState(null);
 
-  const fetchProfile = async () => {
-    try {
+  const {
+    data: doctor = null,
+    isLoading: loading,
+    refetch: fetchProfile,
+  } = useQuery({
+    queryKey: DOCTOR_PROFILE_QUERY_KEY,
+    queryFn: async () => {
       const res = await doctorApi.get("/doctors/profile");
-      setDoctor(res.data.data);
       localStorage.setItem("doctor", JSON.stringify(res.data.data));
-    } catch (error) {
-      console.error("Failed to load doctor profile:", error);
-      toast.error("Failed to load practitioner profile.");
-    } finally {
-      setLoading(false);
-    }
+      return res.data.data;
+    },
+    meta: { errorMessage: "Failed to load practitioner profile." },
+  });
+
+  const setDoctor = (updater) => {
+    queryClient.setQueryData(DOCTOR_PROFILE_QUERY_KEY, (prev) =>
+      typeof updater === "function" ? updater(prev) : updater
+    );
   };
 
-  const fetchReviews = async () => {
-    try {
-      setLoadingReviews(true);
+  const {
+    data: reviews = [],
+    isLoading: loadingReviews,
+    refetch: fetchReviews,
+  } = useQuery({
+    queryKey: ["doctor-received-reviews"],
+    queryFn: async () => {
       const res = await doctorApi.get("/reviews/doctor-received");
-      setReviews(res.data?.data || []);
-    } catch (error) {
-      console.error("Failed to load received reviews:", error);
-    } finally {
-      setLoadingReviews(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProfile();
-    fetchReviews();
-  }, []);
+      return res.data?.data || [];
+    },
+    meta: { onError: (error) => console.error("Failed to load received reviews:", error) },
+  });
 
   const handleReplySubmit = async (reviewId) => {
     const text = replyInputs[reviewId]?.trim();

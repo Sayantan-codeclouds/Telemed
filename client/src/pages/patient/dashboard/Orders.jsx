@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   ShoppingBag,
@@ -103,8 +104,6 @@ const STATUS_CONFIG = {
 };
 
 export default function PatientOrders() {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedType, setSelectedType] = useState("ALL");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
@@ -112,36 +111,27 @@ export default function PatientOrders() {
   const [expandedOrders, setExpandedOrders] = useState({});
   const [downloadingId, setDownloadingId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
-  const [currencySign, setCurrencySign] = useState("$");
 
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
+  const {
+    data: orders = [],
+    isLoading: loading,
+    refetch: fetchOrders,
+  } = useQuery({
+    queryKey: ["patient-pharmacy-orders"],
+    queryFn: async () => {
       const { data } = await api.get("/pharmacy/orders/my-orders");
-      setOrders(data?.data || []);
-    } catch (err) {
-      console.error("Failed to load orders:", err);
-      toast.error(err.response?.data?.message || "Failed to load orders.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return data?.data || [];
+    },
+    meta: { errorMessage: "Failed to load orders." },
+  });
 
-  const fetchSettings = async () => {
-    try {
+  const { data: currencySign = "$" } = useQuery({
+    queryKey: ["pharmacy-settings-currency"],
+    queryFn: async () => {
       const { data } = await api.get("/pharmacy/settings");
-      if (data?.data?.currencySign) {
-        setCurrencySign(data.data.currencySign);
-      }
-    } catch {
-      // fallback
-    }
-  };
-
-  useEffect(() => {
-    fetchOrders();
-    fetchSettings();
-  }, []);
+      return data?.data?.currencySign || "$";
+    },
+  });
 
   const toggleExpand = (id) => {
     setExpandedOrders((prev) => ({ ...prev, [id]: !prev[id] }));

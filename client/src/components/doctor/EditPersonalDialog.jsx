@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import doctorApi from "../../api/doctorApi";
 
@@ -22,35 +22,19 @@ export default function EditPersonalDialog({
 
 }) {
 
-    const [form, setForm] = useState({
+    const emptyForm = { firstName: "", lastName: "", phone: "" };
 
-        firstName: "",
+    const [form, setForm] = useState(() =>
+        doctor ? { firstName: doctor.firstName || "", lastName: doctor.lastName || "", phone: doctor.phone || "" } : emptyForm
+    );
+    const [seededFrom, setSeededFrom] = useState(doctor);
 
-        lastName: "",
-
-        phone: "",
-
-    });
+    if (doctor !== seededFrom) {
+        setSeededFrom(doctor);
+        setForm(doctor ? { firstName: doctor.firstName || "", lastName: doctor.lastName || "", phone: doctor.phone || "" } : emptyForm);
+    }
 
     const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-
-        if (doctor) {
-
-            setForm({
-
-                firstName: doctor.firstName || "",
-
-                lastName: doctor.lastName || "",
-
-                phone: doctor.phone || "",
-
-            });
-
-        }
-
-    }, [doctor]);
 
     const handleChange = (e) => {
 

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Pill,
   Search,
@@ -40,8 +41,7 @@ const DOSAGE_FORMS = ["Tablet", "Capsule", "Syrup", "Injection", "Ointment", "Dr
 
 export default function AdminPharmacy() {
   const { formatPrice, currencySign } = useCurrency();
-  const [medicines, setMedicines] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
 
@@ -65,21 +65,25 @@ export default function AdminPharmacy() {
     description: "",
   });
 
-  const fetchMedicines = async () => {
-    try {
-      const { data } = await adminApi.get("/admin/pharmacy/medicines");
-      setMedicines(data.data || []);
-    } catch (error) {
-      console.error("Failed to load pharmacy medicines:", error);
-      toast.error("Failed to load medicines catalog.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const MEDICINES_QUERY_KEY = ["admin-pharmacy-medicines"];
 
-  useEffect(() => {
-    fetchMedicines();
-  }, []);
+  const {
+    data: medicines = [],
+    isLoading: loading,
+  } = useQuery({
+    queryKey: MEDICINES_QUERY_KEY,
+    queryFn: async () => {
+      const { data } = await adminApi.get("/admin/pharmacy/medicines");
+      return data.data || [];
+    },
+    meta: { errorMessage: "Failed to load medicines catalog." },
+  });
+
+  const setMedicines = (updater) => {
+    queryClient.setQueryData(MEDICINES_QUERY_KEY, (prev) =>
+      typeof updater === "function" ? updater(prev || []) : updater
+    );
+  };
 
   const handleOpenAddModal = () => {
     setEditingMedicine(null);

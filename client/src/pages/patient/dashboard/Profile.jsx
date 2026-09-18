@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Mail,
   Phone,
@@ -22,30 +23,24 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
 import api from "@/api/axios";
 import EditProfileDrawer from "@/components/patient/EditProfileDrawer";
 
 export default function Profile() {
   const [open, setOpen] = useState(false);
-  const [patient, setPatient] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  const loadProfile = async () => {
-    try {
+  const {
+    data: patient = null,
+    isLoading: loading,
+    refetch: loadProfile,
+  } = useQuery({
+    queryKey: ["patient-own-profile"],
+    queryFn: async () => {
       const res = await api.get("/patients/profile");
-      setPatient(res.data.data);
-    } catch (err) {
-      console.error("Failed to load patient profile:", err);
-      toast.error("Failed to load profile details.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadProfile();
-  }, []);
+      return res.data.data;
+    },
+    meta: { errorMessage: "Failed to load profile details." },
+  });
 
   if (loading) {
     return (

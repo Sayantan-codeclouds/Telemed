@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Loader2,
   Search,
@@ -40,10 +41,11 @@ const STATUS_LIST = [
   "NO_SHOW",
 ];
 
+const APPOINTMENTS_QUERY_KEY = ["admin-appointments"];
+
 export default function AdminAppointments() {
   const { formatPrice } = useCurrency();
-  const [appointments, setAppointments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   // Search & Filter & Sort state
   const [search, setSearch] = useState("");
@@ -53,21 +55,20 @@ export default function AdminAppointments() {
   const [rescheduleAppointment, setRescheduleAppointment] = useState(null);
   const [viewingAppointment, setViewingAppointment] = useState(null);
 
-  const fetchAppointments = async () => {
-    try {
+  const { data: appointments = [], isLoading: loading } = useQuery({
+    queryKey: APPOINTMENTS_QUERY_KEY,
+    queryFn: async () => {
       const { data } = await adminApi.get("/admin/appointments");
-      setAppointments(data.data || []);
-    } catch (error) {
-      console.error("Failed to load appointments:", error);
-      toast.error("Failed to load consultations.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return data.data || [];
+    },
+    meta: { errorMessage: "Failed to load consultations." },
+  });
 
-  useEffect(() => {
-    fetchAppointments();
-  }, []);
+  const setAppointments = (updater) => {
+    queryClient.setQueryData(APPOINTMENTS_QUERY_KEY, (prev) =>
+      typeof updater === "function" ? updater(prev || []) : updater
+    );
+  };
 
   const handleDeleteAppointment = async (id) => {
     if (!window.confirm("Are you sure you want to permanently delete this appointment record?")) {
@@ -462,6 +463,7 @@ export default function AdminAppointments() {
       {/* Admin Reschedule Modal */}
       {rescheduleAppointment && (
         <AdminRescheduleModal
+          key={rescheduleAppointment._id}
           isOpen={Boolean(rescheduleAppointment)}
           onClose={() => setRescheduleAppointment(null)}
           appointment={rescheduleAppointment}

@@ -268,8 +268,12 @@ export default function EditProfileDrawer({
     { id: "history", label: "Medical History & EHR", icon: FileHeart },
   ];
 
-  useEffect(() => {
-    if (!patient) return;
+  // Re-seed the form/tag-lists/preview whenever a different patient is
+  // loaded or the drawer is (re)opened, adjusted during render instead of
+  // via an effect.
+  const [seededFrom, setSeededFrom] = useState({ patient: null, open: false });
+  if (patient && (patient !== seededFrom.patient || open !== seededFrom.open)) {
+    setSeededFrom({ patient, open });
 
     setFormData({
       firstName: patient.firstName || "",
@@ -303,7 +307,7 @@ export default function EditProfileDrawer({
       patient.profileImage ||
         `https://ui-avatars.com/api/?name=${patient.firstName || "P"}+${patient.lastName || "T"}&background=2563eb&color=fff&size=200`
     );
-  }, [patient, open]);
+  }
 
   // Handle ESC key to close modal
   useEffect(() => {

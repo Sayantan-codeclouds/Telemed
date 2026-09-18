@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   FileText,
@@ -38,12 +39,11 @@ const REPORT_TYPE_FILTERS = [
   { key: "OTHER", label: "Other" },
 ];
 
+const RECORDS_QUERY_KEY = ["patient-medical-records"];
+const EMPTY_RECORDS = { profile: null, appointments: [], prescriptions: [], labReports: [] };
+
 export default function Records() {
-  const [profile, setProfile] = useState(null);
-  const [appointments, setAppointments] = useState([]);
-  const [prescriptions, setPrescriptions] = useState([]);
-  const [labReports, setLabReports] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("LAB_REPORTS"); // "LAB_REPORTS" | "EHR_OVERVIEW"
   const [reportTypeFilter, setReportTypeFilter] = useState("ALL");
   const [searchReport, setSearchReport] = useState("");
@@ -51,8 +51,12 @@ export default function Records() {
   const [deletingId, setDeletingId] = useState(null);
   const [previewReport, setPreviewReport] = useState(null);
 
-  const fetchRecords = async () => {
-    try {
+  const {
+    data: { profile, appointments, prescriptions, labReports } = EMPTY_RECORDS,
+    isLoading: loading,
+  } = useQuery({
+    queryKey: RECORDS_QUERY_KEY,
+    queryFn: async () => {
       const [profileRes, apptRes, presRes, reportsRes] = await Promise.all([
         api.get("/patients/profile"),
         api.get("/appointments/patient"),
@@ -60,21 +64,22 @@ export default function Records() {
         api.get("/lab-reports"),
       ]);
 
-      setProfile(profileRes?.data?.data || null);
-      setAppointments(apptRes?.data?.data || []);
-      setPrescriptions(presRes?.data?.data || []);
-      setLabReports(reportsRes?.data?.data || []);
-    } catch (error) {
-      console.error("Failed to load medical records:", error);
-      toast.error("Failed to load records.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return {
+        profile: profileRes?.data?.data || null,
+        appointments: apptRes?.data?.data || [],
+        prescriptions: presRes?.data?.data || [],
+        labReports: reportsRes?.data?.data || [],
+      };
+    },
+    meta: { errorMessage: "Failed to load records." },
+  });
 
-  useEffect(() => {
-    fetchRecords();
-  }, []);
+  const setLabReports = (updater) => {
+    queryClient.setQueryData(RECORDS_QUERY_KEY, (prev) => ({
+      ...(prev || EMPTY_RECORDS),
+      labReports: typeof updater === "function" ? updater(prev?.labReports || []) : updater,
+    }));
+  };
 
   // Unique list of doctors patient has consulted with
   const doctorsList = useMemo(() => {

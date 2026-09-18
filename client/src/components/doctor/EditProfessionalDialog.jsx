@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import doctorApi from "../../api/doctorApi";
 
 import {
@@ -21,43 +21,26 @@ export default function EditProfessionalDialog({
 
 }) {
 
-  const [form, setForm] = useState({
+  const emptyForm = { specialization: "", qualification: "", experience: "", licenseNumber: "" };
+  const buildForm = (d) =>
+    d
+      ? {
+          specialization: d.specialization || "",
+          qualification: d.qualification || "",
+          experience: d.experience || "",
+          licenseNumber: d.licenseNumber || "",
+        }
+      : emptyForm;
 
-    specialization: "",
+  const [form, setForm] = useState(() => buildForm(doctor));
+  const [seededFrom, setSeededFrom] = useState(doctor);
 
-    qualification: "",
-
-    experience: "",
-
-    licenseNumber: "",
-
-  });
+  if (doctor !== seededFrom) {
+    setSeededFrom(doctor);
+    setForm(buildForm(doctor));
+  }
 
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-
-    if (doctor) {
-
-      setForm({
-
-        specialization:
-          doctor.specialization || "",
-
-        qualification:
-          doctor.qualification || "",
-
-        experience:
-          doctor.experience || "",
-
-        licenseNumber:
-          doctor.licenseNumber || "",
-
-      });
-
-    }
-
-  }, [doctor]);
 
   const handleChange = (e) => {
 

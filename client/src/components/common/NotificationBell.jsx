@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   Check,
@@ -27,12 +28,12 @@ function timeAgo(date) {
   return new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+const NOTIFICATIONS_QUERY_KEY = (role) => ["notifications", role];
+
 export default function NotificationBell({ role = "patient" }) {
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
+  const queryClient = useQueryClient();
 
   const getClient = () => {
     if (role === "doctor") return doctorApi;
@@ -40,34 +41,47 @@ export default function NotificationBell({ role = "patient" }) {
     return api;
   };
 
-  const fetchNotifications = async () => {
-    const token =
+  const hasToken = () =>
+    Boolean(
       role === "doctor"
         ? localStorage.getItem("doctorToken")
         : role === "admin"
         ? localStorage.getItem("adminToken")
-        : localStorage.getItem("patientToken");
+        : localStorage.getItem("patientToken")
+    );
 
-    if (!token) return;
-
-    try {
-      setLoading(true);
+  const {
+    data: { notifications, unreadCount } = { notifications: [], unreadCount: 0 },
+    isLoading: loading,
+    refetch: fetchNotifications,
+  } = useQuery({
+    queryKey: NOTIFICATIONS_QUERY_KEY(role),
+    queryFn: async () => {
       const client = getClient();
       const { data } = await client.get("/notifications");
-      if (data?.data) {
-        setNotifications(data.data.notifications || []);
-        setUnreadCount(data.data.unreadCount || 0);
-      }
-    } catch {
-      // Quiet fail
-    } finally {
-      setLoading(false);
-    }
+      return {
+        notifications: data?.data?.notifications || [],
+        unreadCount: data?.data?.unreadCount || 0,
+      };
+    },
+    enabled: hasToken(),
+  });
+
+  const setNotifications = (updater) => {
+    queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY(role), (prev) => ({
+      notifications: typeof updater === "function" ? updater(prev?.notifications || []) : updater,
+      unreadCount: prev?.unreadCount || 0,
+    }));
+  };
+
+  const setUnreadCount = (updater) => {
+    queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY(role), (prev) => ({
+      notifications: prev?.notifications || [],
+      unreadCount: typeof updater === "function" ? updater(prev?.unreadCount || 0) : updater,
+    }));
   };
 
   useEffect(() => {
-    fetchNotifications();
-
     const storedUser = JSON.parse(localStorage.getItem(role) || "{}");
     const userId = storedUser._id || storedUser.id;
 

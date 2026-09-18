@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Building2,
@@ -87,9 +88,6 @@ export default function DoctorDetails() {
   const navigate = useNavigate();
   const { formatPrice } = useCurrency();
 
-  const [doctor, setDoctor] = useState(null);
-  const [loading, setLoading] = useState(true);
-
   const [selectedDate, setSelectedDate] = useState("");
   const [slots, setSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -99,14 +97,6 @@ export default function DoctorDetails() {
   const [bookedAppointment, setBookedAppointment] = useState(null);
 
   // Reviews State
-  const [reviewsData, setReviewsData] = useState({
-    averageRating: 5.0,
-    totalReviews: 0,
-    ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-    topTags: [],
-    reviews: [],
-  });
-  const [loadingReviews, setLoadingReviews] = useState(true);
   const [filterStar, setFilterStar] = useState("ALL");
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
 
@@ -115,12 +105,6 @@ export default function DoctorDetails() {
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [applyingCoupon, setApplyingCoupon] = useState(false);
 
-  // Vrio CRM Gateway & Pay to Consult State
-  const [crmConfig, setCrmConfig] = useState({
-    consultationItemId: 3366,
-    consultationOfferId: 29,
-    isEnabled: true,
-  });
   const [paymentForm, setPaymentForm] = useState({
     cardHolder: "",
     cardNumber: "",
@@ -137,76 +121,82 @@ export default function DoctorDetails() {
   });
   const [autoFilledProfile, setAutoFilledProfile] = useState(false);
 
-  const fetchDoctorDetails = async () => {
-    try {
+  const {
+    data: doctor = null,
+    isLoading: loading,
+    refetch: fetchDoctorDetails,
+  } = useQuery({
+    queryKey: ["doctor-details", id],
+    queryFn: async () => {
       const res = await api.get(`/doctors/${id}`);
-      setDoctor(res.data.data);
-    } catch (err) {
-      console.error("Failed to load doctor profile:", err);
-      toast.error("Unable to load doctor profile.");
-    } finally {
-      setLoading(false);
-    }
+      return res.data.data;
+    },
+    meta: { errorMessage: "Unable to load doctor profile." },
+  });
+
+  const DEFAULT_REVIEWS_DATA = {
+    averageRating: 5.0,
+    totalReviews: 0,
+    ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+    topTags: [],
+    reviews: [],
   };
 
-  const fetchReviews = async () => {
-    try {
-      setLoadingReviews(true);
+  const {
+    data: reviewsData = DEFAULT_REVIEWS_DATA,
+    isLoading: loadingReviews,
+    refetch: fetchReviews,
+  } = useQuery({
+    queryKey: ["doctor-reviews", id],
+    queryFn: async () => {
       const res = await api.get(`/reviews/doctor/${id}`);
-      if (res.data?.data) {
-        setReviewsData(res.data.data);
-      }
-    } catch (err) {
-      console.error("Failed to load doctor reviews:", err);
-    } finally {
-      setLoadingReviews(false);
+      return res.data?.data || DEFAULT_REVIEWS_DATA;
+    },
+    meta: { onError: (err) => console.error("Failed to load doctor reviews:", err) },
+  });
+
+  const { data: crmConfig = { consultationItemId: 3366, consultationOfferId: 29, isEnabled: true } } =
+    useQuery({
+      queryKey: ["public-crm-config"],
+      queryFn: async () => {
+        const res = await api.get("/pharmacy/settings");
+        return {
+          consultationItemId: res.data?.data?.consultationItemId || 3366,
+          consultationOfferId: res.data?.data?.consultationOfferId || 29,
+          isEnabled: res.data?.data?.isEnabled ?? true,
+        };
+      },
+    });
+
+  const { data: ownProfileForPrefill } = useQuery({
+    queryKey: ["own-patient-profile-prefill"],
+    queryFn: async () => {
+      const res = await api.get("/patients/profile");
+      return res.data?.data || null;
+    },
+  });
+
+  // Pre-fill patient address and cardholder name from the database profile
+  // once it arrives, adjusted during render instead of via an effect.
+  const [appliedProfilePrefill, setAppliedProfilePrefill] = useState(undefined);
+  if (ownProfileForPrefill && ownProfileForPrefill !== appliedProfilePrefill) {
+    setAppliedProfilePrefill(ownProfileForPrefill);
+    const fullName = `${ownProfileForPrefill.firstName || ""} ${ownProfileForPrefill.lastName || ""}`.trim();
+    setPaymentForm((prev) => ({
+      ...prev,
+      cardHolder: prev.cardHolder || fullName,
+    }));
+    if (ownProfileForPrefill.address) {
+      setBillingAddress({
+        line1: ownProfileForPrefill.address.line1 || "",
+        city: ownProfileForPrefill.address.city || "",
+        state: ownProfileForPrefill.address.state || "",
+        pincode: ownProfileForPrefill.address.pincode || "",
+        country: ownProfileForPrefill.address.country || "US",
+      });
+      setAutoFilledProfile(true);
     }
-  };
-
-  // Load Doctor Details, Reviews, CRM Settings & Patient Profile
-  useEffect(() => {
-    fetchDoctorDetails();
-    fetchReviews();
-
-    // Fetch CRM public settings for Item ID & Offer ID
-    api
-      .get("/pharmacy/settings")
-      .then((res) => {
-        if (res.data?.data) {
-          setCrmConfig({
-            consultationItemId: res.data.data.consultationItemId || 3366,
-            consultationOfferId: res.data.data.consultationOfferId || 29,
-            isEnabled: res.data.data.isEnabled ?? true,
-          });
-        }
-      })
-      .catch(() => {});
-
-    // Pre-fill patient address and cardholder name from database profile
-    api
-      .get("/patients/profile")
-      .then((res) => {
-        const prof = res.data?.data;
-        if (prof) {
-          const fullName = `${prof.firstName || ""} ${prof.lastName || ""}`.trim();
-          setPaymentForm((prev) => ({
-            ...prev,
-            cardHolder: prev.cardHolder || fullName,
-          }));
-          if (prof.address) {
-            setBillingAddress({
-              line1: prof.address.line1 || "",
-              city: prof.address.city || "",
-              state: prof.address.state || "",
-              pincode: prof.address.pincode || "",
-              country: prof.address.country || "US",
-            });
-            setAutoFilledProfile(true);
-          }
-        }
-      })
-      .catch(() => {});
-  }, [id]);
+  }
 
   // Generate Next 10 Days for Date Selector
   const upcomingDays = useMemo(() => {

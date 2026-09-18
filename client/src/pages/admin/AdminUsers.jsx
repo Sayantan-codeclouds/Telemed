@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Users,
   ShieldCheck,
@@ -41,9 +42,10 @@ const ROLE_CONFIG = {
   },
 };
 
+const USERS_QUERY_KEY = ["admin-users"];
+
 export default function AdminUsers() {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -63,22 +65,24 @@ export default function AdminUsers() {
     role: "CustomerSupport",
   });
 
-  const fetchUsers = async () => {
-    try {
-      setLoading(true);
+  const {
+    data: users = [],
+    isLoading: loading,
+    refetch: fetchUsers,
+  } = useQuery({
+    queryKey: USERS_QUERY_KEY,
+    queryFn: async () => {
       const { data } = await adminApi.get("/admin/users");
-      setUsers(data.data || []);
-    } catch (err) {
-      console.error("Failed to load admin team:", err);
-      toast.error(err.response?.data?.message || "Failed to load admin users.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return data.data || [];
+    },
+    meta: { errorMessage: "Failed to load admin users." },
+  });
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  const setUsers = (updater) => {
+    queryClient.setQueryData(USERS_QUERY_KEY, (prev) =>
+      typeof updater === "function" ? updater(prev || []) : updater
+    );
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

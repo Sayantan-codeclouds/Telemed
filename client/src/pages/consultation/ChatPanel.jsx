@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { Send, Loader2 } from "lucide-react";
 import socket from "../../socket/socket";
@@ -9,22 +10,34 @@ import { Button } from "@/components/ui/button";
 
 export default function ChatPanel({ user, doctor }) {
   const { appointmentId } = useParams();
-  const [messages, setMessages] = useState([]);
-  const [loadingMessages, setLoadingMessages] = useState(true);
   const [message, setMessage] = useState("");
   const [typingUser, setTypingUser] = useState("");
-  const [, setConnected] = useState(socket.connected);
   const typingTimeout = useRef(null);
   const messagesEndRef = useRef(null);
+  const queryClient = useQueryClient();
 
   const isDoctor = user?.type === "Doctor";
   const apiClient = isDoctor ? doctorApi : api;
 
-  useEffect(() => {
-    const handleConnect = () => setConnected(true);
-    const handleDisconnect = () => setConnected(false);
-    setConnected(socket.connected);
+  const chatQueryKey = ["chat-messages", appointmentId, isDoctor];
 
+  const { data: messages = [], isLoading: loadingMessages } = useQuery({
+    queryKey: chatQueryKey,
+    queryFn: async () => {
+      const res = await apiClient.get(`/chat/${appointmentId}`);
+      return res.data?.data || [];
+    },
+    enabled: !!appointmentId,
+    meta: { onError: (err) => console.error("Failed to load chat history:", err) },
+  });
+
+  const setMessages = (updater) => {
+    queryClient.setQueryData(chatQueryKey, (prev) =>
+      typeof updater === "function" ? updater(prev || []) : updater
+    );
+  };
+
+  useEffect(() => {
     const handleReceiveMessage = (data) => {
       if (!data) return;
       setMessages((prev) => {
@@ -51,28 +64,11 @@ export default function ChatPanel({ user, doctor }) {
     const handleTyping = (data) => setTypingUser(data.senderName);
     const handleStopTyping = () => setTypingUser("");
 
-    const loadMessages = async () => {
-      try {
-        const res = await apiClient.get(`/chat/${appointmentId}`);
-        setMessages(res.data?.data || []);
-      } catch (err) {
-        console.error("Failed to load chat history:", err);
-      } finally {
-        setLoadingMessages(false);
-      }
-    };
-
-    loadMessages();
-
-    socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
     socket.on("receive-message", handleReceiveMessage);
     socket.on("typing", handleTyping);
     socket.on("stop-typing", handleStopTyping);
 
     return () => {
-      socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
       socket.off("receive-message", handleReceiveMessage);
       socket.off("typing", handleTyping);
       socket.off("stop-typing", handleStopTyping);

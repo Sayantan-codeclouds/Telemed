@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Gift,
   Search,
@@ -27,8 +28,6 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 
 export default function AdminGiftCards() {
   const { formatPrice, currencySign } = useCurrency();
-  const [giftCards, setGiftCards] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
 
   // Filters & Sorting
@@ -52,33 +51,30 @@ export default function AdminGiftCards() {
     gift_card_notes: "",
   });
 
-  const [crmProvider, setCrmProvider] = useState("vrio");
 
-  const fetchGiftCards = async () => {
-    try {
-      setLoading(true);
+  const {
+    data: { giftCards, crmProvider } = { giftCards: [], crmProvider: "vrio" },
+    isLoading: loading,
+    refetch: fetchGiftCardsQuery,
+  } = useQuery({
+    queryKey: ["admin-gift-cards"],
+    queryFn: async () => {
       const [res, crmRes] = await Promise.allSettled([
         adminApi.get("/gift-cards"),
         adminApi.get("/admin/crm-settings"),
       ]);
-      if (res.status === "fulfilled") {
-        setGiftCards(res.value.data?.data || []);
-      }
-      if (crmRes.status === "fulfilled") {
-        setCrmProvider(crmRes.value.data?.data?.crmProvider || "vrio");
-      }
-    } catch (error) {
-      console.error("Failed to load gift cards:", error);
-      toast.error("Failed to load gift cards from Vrio CRM.");
-    } finally {
-      setLoading(false);
-      setSyncing(false);
-    }
-  };
+      return {
+        giftCards: res.status === "fulfilled" ? res.value.data?.data || [] : [],
+        crmProvider: crmRes.status === "fulfilled" ? crmRes.value.data?.data?.crmProvider || "vrio" : "vrio",
+      };
+    },
+    meta: { errorMessage: "Failed to load gift cards from Vrio CRM." },
+  });
 
-  useEffect(() => {
-    fetchGiftCards();
-  }, []);
+  const fetchGiftCards = async () => {
+    await fetchGiftCardsQuery();
+    setSyncing(false);
+  };
 
   const handleSyncVrio = async () => {
     setSyncing(true);

@@ -35,13 +35,14 @@ export default function SignatureStampModal({
   const [isDrawing, setIsDrawing] = useState(false);
   const [, setHasDrawn] = useState(false);
 
-  // Sync with doctor prop changes
-  useEffect(() => {
-    if (doctor) {
-      setSignatureUrl(doctor.signature || "");
-      setStampUrl(doctor.clinicStamp || "");
-    }
-  }, [doctor]);
+  // Re-sync signature/stamp when a different doctor is loaded, adjusting
+  // state during render instead of via an effect.
+  const [seededFrom, setSeededFrom] = useState(doctor);
+  if (doctor && doctor !== seededFrom) {
+    setSeededFrom(doctor);
+    setSignatureUrl(doctor.signature || "");
+    setStampUrl(doctor.clinicStamp || "");
+  }
 
   // Initialize Canvas
   useEffect(() => {

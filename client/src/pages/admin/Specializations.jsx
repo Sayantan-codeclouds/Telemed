@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Stethoscope,
   Plus,
@@ -34,9 +35,10 @@ const CATEGORY_COLORS = {
   Other: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
+const SPECIALIZATIONS_QUERY_KEY = ["admin-specializations"];
+
 export default function AdminSpecializations() {
-  const [specializations, setSpecializations] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
 
@@ -56,22 +58,24 @@ export default function AdminSpecializations() {
     isActive: true,
   });
 
-  const fetchSpecializations = async () => {
-    try {
-      setLoading(true);
+  const {
+    data: specializations = [],
+    isLoading: loading,
+    refetch: fetchSpecializations,
+  } = useQuery({
+    queryKey: SPECIALIZATIONS_QUERY_KEY,
+    queryFn: async () => {
       const res = await adminApi.get("/specializations/admin");
-      setSpecializations(res.data?.data || []);
-    } catch (err) {
-      console.error("Failed to load specializations:", err);
-      toast.error("Failed to load specializations from database.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return res.data?.data || [];
+    },
+    meta: { errorMessage: "Failed to load specializations from database." },
+  });
 
-  useEffect(() => {
-    fetchSpecializations();
-  }, []);
+  const setSpecializations = (updater) => {
+    queryClient.setQueryData(SPECIALIZATIONS_QUERY_KEY, (prev) =>
+      typeof updater === "function" ? updater(prev || []) : updater
+    );
+  };
 
   const openCreateModal = () => {
     setEditingItem(null);

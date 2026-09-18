@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Clock,
   CalendarDays,
@@ -106,51 +107,50 @@ function validateSlot(slot, daySlots = [], currentIndex = -1) {
 
 export default function Availability() {
   const [availability, setAvailability] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const fetchAvailability = async () => {
-    try {
+  const { data: fetchedSchedule, isLoading: loading } = useQuery({
+    queryKey: ["doctor-availability"],
+    queryFn: async () => {
       const res = await doctorApi.get("/doctors/availability");
-      const fetched = res.data?.data || [];
+      return res.data?.data || [];
+    },
+    meta: { errorMessage: "Failed to load your availability schedule." },
+  });
 
-      // Ensure all 7 days are always represented in standard order
-      const completeSchedule = DAYS.map((dayName) => {
-        const found = fetched.find((f) => f.day === dayName);
-        if (found) {
-          return {
-            day: dayName,
-            enabled: Boolean(found.enabled),
-            slots: found.slots?.length
-              ? found.slots.map((s) => ({ start: s.start, end: s.end }))
-              : [],
-          };
-        }
+  // Seed the editable schedule once when it arrives, adjusted during render
+  // instead of via an effect (availability is then a locally-edited draft).
+  const [appliedSchedule, setAppliedSchedule] = useState(undefined);
+  if (fetchedSchedule && fetchedSchedule !== appliedSchedule) {
+    setAppliedSchedule(fetchedSchedule);
+
+    // Ensure all 7 days are always represented in standard order
+    const completeSchedule = DAYS.map((dayName) => {
+      const found = fetchedSchedule.find((f) => f.day === dayName);
+      if (found) {
         return {
           day: dayName,
-          enabled: dayName !== "Sunday",
-          slots:
-            dayName !== "Sunday"
-              ? [
-                  { start: "09:00", end: "13:00" },
-                  { start: "17:00", end: "20:00" },
-                ]
-              : [],
+          enabled: Boolean(found.enabled),
+          slots: found.slots?.length
+            ? found.slots.map((s) => ({ start: s.start, end: s.end }))
+            : [],
         };
-      });
+      }
+      return {
+        day: dayName,
+        enabled: dayName !== "Sunday",
+        slots:
+          dayName !== "Sunday"
+            ? [
+                { start: "09:00", end: "13:00" },
+                { start: "17:00", end: "20:00" },
+              ]
+            : [],
+      };
+    });
 
-      setAvailability(completeSchedule);
-    } catch (err) {
-      console.error("Failed to load doctor availability:", err);
-      toast.error(err.response?.data?.message || "Failed to load your availability schedule.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAvailability();
-  }, []);
+    setAvailability(completeSchedule);
+  }
 
   const toggleDay = (dayIndex, forcedState = null) => {
     setAvailability((prev) => {

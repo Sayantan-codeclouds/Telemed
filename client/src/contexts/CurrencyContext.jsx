@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useEffect, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/api/axios";
 
 const CurrencyContext = createContext({
@@ -7,33 +8,35 @@ const CurrencyContext = createContext({
   refreshCurrency: () => {},
 });
 
+const CURRENCY_QUERY_KEY = ["currency-sign"];
+
+async function fetchCurrencySign() {
+  const res = await api.get("/pharmacy/settings");
+  return res.data?.data?.currencySign || "$";
+}
+
 export function CurrencyProvider({ children }) {
-  const [currencySign, setCurrencySign] = useState(() => {
-    return localStorage.getItem("telemed_currency_sign") || "$";
+  const queryClient = useQueryClient();
+
+  const { data: currencySign = localStorage.getItem("telemed_currency_sign") || "$", refetch } = useQuery({
+    queryKey: CURRENCY_QUERY_KEY,
+    queryFn: fetchCurrencySign,
+    staleTime: Infinity,
   });
 
-  const fetchCurrency = useCallback(async () => {
-    try {
-      const res = await api.get("/pharmacy/settings");
-      const sign = res.data?.data?.currencySign || "$";
-      setCurrencySign(sign);
-      localStorage.setItem("telemed_currency_sign", sign);
-    } catch {
-      // Keep existing cached currency
-    }
-  }, []);
+  useEffect(() => {
+    localStorage.setItem("telemed_currency_sign", currencySign);
+  }, [currencySign]);
 
   useEffect(() => {
-    fetchCurrency();
-
     const handleStorage = (e) => {
       if (e.key === "telemed_currency_sign" && e.newValue) {
-        setCurrencySign(e.newValue);
+        queryClient.setQueryData(CURRENCY_QUERY_KEY, e.newValue);
       }
     };
 
     const handleCustomUpdate = () => {
-      fetchCurrency();
+      refetch();
     };
 
     window.addEventListener("storage", handleStorage);
@@ -43,7 +46,7 @@ export function CurrencyProvider({ children }) {
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener("currency-updated", handleCustomUpdate);
     };
-  }, [fetchCurrency]);
+  }, [queryClient, refetch]);
 
   const formatPrice = useCallback(
     (amount, decimals = 0) => {
@@ -61,7 +64,7 @@ export function CurrencyProvider({ children }) {
       value={{
         currencySign,
         formatPrice,
-        refreshCurrency: fetchCurrency,
+        refreshCurrency: refetch,
       }}
     >
       {children}

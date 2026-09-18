@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Loader2,
   Search,
@@ -22,11 +23,11 @@ import api from "@/api/axios";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { getProfileImageUrl } from "@/utils/imageUrl";
 
+const DOCTORS_QUERY_KEY = ["admin-doctors"];
+
 export default function AdminDoctors() {
   const { formatPrice, currencySign } = useCurrency();
-  const [doctors, setDoctors] = useState([]);
-  const [specializations, setSpecializations] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   // Search & Filter & Sort state
   const [search, setSearch] = useState("");
@@ -62,33 +63,32 @@ export default function AdminDoctors() {
     status: "ACTIVE",
   });
 
-  const fetchDoctors = async () => {
-    try {
+  const {
+    data: doctors = [],
+    isLoading: loading,
+    refetch: fetchDoctors,
+  } = useQuery({
+    queryKey: DOCTORS_QUERY_KEY,
+    queryFn: async () => {
       const { data } = await adminApi.get("/admin/doctors");
-      setDoctors(data.data || []);
-    } catch (error) {
-      console.error("Failed to load doctors:", error);
-      toast.error("Failed to load doctor network.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return data.data || [];
+    },
+    meta: { errorMessage: "Failed to load doctor network." },
+  });
 
-  const fetchSpecializations = async () => {
-    try {
+  const { data: specializations = [] } = useQuery({
+    queryKey: ["specializations-list"],
+    queryFn: async () => {
       const { data } = await api.get("/specializations");
-      if (data?.data && data.data.length > 0) {
-        setSpecializations(data.data.map((s) => s.name));
-      }
-    } catch (error) {
-      console.error("Failed to load specializations:", error);
-    }
-  };
+      return data?.data?.length > 0 ? data.data.map((s) => s.name) : [];
+    },
+  });
 
-  useEffect(() => {
-    fetchDoctors();
-    fetchSpecializations();
-  }, []);
+  const setDoctors = (updater) => {
+    queryClient.setQueryData(DOCTORS_QUERY_KEY, (prev) =>
+      typeof updater === "function" ? updater(prev || []) : updater
+    );
+  };
 
   const handleOpenModal = () => {
     setFormData({

@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Loader2,
   Search,
@@ -22,9 +23,10 @@ import { getProfileImageUrl } from "@/utils/imageUrl";
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 const GENDERS = ["Male", "Female", "Other"];
 
+const PATIENTS_QUERY_KEY = ["admin-patients"];
+
 export default function AdminPatients() {
-  const [patients, setPatients] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   // Search & Filter & Sort state
   const [search, setSearch] = useState("");
@@ -50,21 +52,24 @@ export default function AdminPatients() {
     status: "ACTIVE",
   });
 
-  const fetchPatients = async () => {
-    try {
+  const {
+    data: patients = [],
+    isLoading: loading,
+    refetch: fetchPatients,
+  } = useQuery({
+    queryKey: PATIENTS_QUERY_KEY,
+    queryFn: async () => {
       const { data } = await adminApi.get("/admin/patients");
-      setPatients(data.data || []);
-    } catch (error) {
-      console.error("Failed to load patients:", error);
-      toast.error("Failed to load patient accounts.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return data.data || [];
+    },
+    meta: { errorMessage: "Failed to load patient accounts." },
+  });
 
-  useEffect(() => {
-    fetchPatients();
-  }, []);
+  const setPatients = (updater) => {
+    queryClient.setQueryData(PATIENTS_QUERY_KEY, (prev) =>
+      typeof updater === "function" ? updater(prev || []) : updater
+    );
+  };
 
   const handleOpenModal = () => {
     setFormData({

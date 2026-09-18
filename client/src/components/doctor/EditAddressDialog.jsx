@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import doctorApi from "../../api/doctorApi";
 
 import {
@@ -21,47 +21,28 @@ export default function EditAddressDialog({
 
 }) {
 
-  const [form, setForm] = useState({
-
+  const emptyAddress = {
     line1: "",
-
     line2: "",
-
     city: "",
-
     state: "",
-
     country: "",
-
     pincode: "",
+  };
 
-  });
+  const [form, setForm] = useState(() =>
+    doctor ? { ...emptyAddress, ...doctor.address } : emptyAddress
+  );
+  // Tracks the doctor this form was last seeded from, so switching to a
+  // different doctor resets the form during render instead of via an effect.
+  const [seededFrom, setSeededFrom] = useState(doctor);
+
+  if (doctor !== seededFrom) {
+    setSeededFrom(doctor);
+    setForm(doctor ? { ...emptyAddress, ...doctor.address } : emptyAddress);
+  }
 
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-
-    if (doctor) {
-
-      setForm({
-
-        line1: doctor.address?.line1 || "",
-
-        line2: doctor.address?.line2 || "",
-
-        city: doctor.address?.city || "",
-
-        state: doctor.address?.state || "",
-
-        country: doctor.address?.country || "",
-
-        pincode: doctor.address?.pincode || "",
-
-      });
-
-    }
-
-  }, [doctor]);
 
   const handleChange = (e) => {
 

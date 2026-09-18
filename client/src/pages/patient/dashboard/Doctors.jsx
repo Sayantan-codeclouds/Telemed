@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Search,
@@ -26,9 +27,7 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 export default function Doctors() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { currencySign, formatPrice } = useCurrency();
-  const [doctors, setDoctors] = useState([]);
   const [dbSpecializations, setDbSpecializations] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
   const urlSpecialization = searchParams.get("specialization") || "";
@@ -59,26 +58,22 @@ export default function Doctors() {
     [currencySign]
   );
 
-  useEffect(() => {
-    if (urlSpecialization) {
-      setSpecialization(urlSpecialization);
-    }
-  }, [urlSpecialization]);
+  // Keep local `specialization` in sync with the URL (e.g. browser back/
+  // forward), adjusted during render instead of via an effect.
+  const [appliedUrlSpecialization, setAppliedUrlSpecialization] = useState(urlSpecialization);
+  if (urlSpecialization && urlSpecialization !== appliedUrlSpecialization) {
+    setAppliedUrlSpecialization(urlSpecialization);
+    setSpecialization(urlSpecialization);
+  }
 
-  const fetchDoctors = async () => {
-    try {
+  const { data: doctors = [], isLoading: loading } = useQuery({
+    queryKey: ["patient-doctors-list"],
+    queryFn: async () => {
       const res = await api.get("/doctors");
-      setDoctors(res.data?.data || []);
-    } catch (err) {
-      console.error("Failed to load doctors:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDoctors();
-  }, []);
+      return res.data?.data || [];
+    },
+    meta: { onError: (err) => console.error("Failed to load doctors:", err) },
+  });
 
   const handleSpecializationChange = (newSpec) => {
     setSpecialization(newSpec);

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   LifeBuoy,
   Search,
@@ -57,10 +58,9 @@ const PRIORITY_BADGES = {
   URGENT: "bg-rose-50 text-rose-700 border-rose-200 font-black",
 };
 
+const DEFAULT_COUNTS = { total: 0, open: 0, inProgress: 0, solved: 0 };
+
 export default function AdminSupportTickets() {
-  const [tickets, setTickets] = useState([]);
-  const [counts, setCounts] = useState({ total: 0, open: 0, inProgress: 0, solved: 0 });
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [selectedSender, setSelectedSender] = useState("ALL");
@@ -71,28 +71,24 @@ export default function AdminSupportTickets() {
   const [adminNotes, setAdminNotes] = useState("");
   const [updating, setUpdating] = useState(false);
 
-  const fetchTickets = async () => {
-    try {
-      setLoading(true);
+  const {
+    data: { tickets, counts } = { tickets: [], counts: DEFAULT_COUNTS },
+    isLoading: loading,
+    refetch: fetchTickets,
+  } = useQuery({
+    // `search` is intentionally excluded: search only re-fetches on explicit submit.
+    queryKey: ["admin-support-tickets", selectedStatus, selectedSender],
+    queryFn: async () => {
       const params = {};
       if (selectedStatus !== "ALL") params.status = selectedStatus;
       if (selectedSender !== "ALL") params.senderType = selectedSender;
       if (search.trim()) params.search = search.trim();
 
       const { data } = await adminApi.get("/support/admin/tickets", { params });
-      setTickets(data?.data || []);
-      if (data?.counts) setCounts(data.counts);
-    } catch (err) {
-      console.error("Failed to load admin support tickets:", err);
-      toast.error("Failed to load support tickets.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTickets();
-  }, [selectedStatus, selectedSender]);
+      return { tickets: data?.data || [], counts: data?.counts || DEFAULT_COUNTS };
+    },
+    meta: { errorMessage: "Failed to load support tickets." },
+  });
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();

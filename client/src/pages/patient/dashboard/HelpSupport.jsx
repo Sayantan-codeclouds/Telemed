@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   LifeBuoy,
   Mail,
@@ -73,8 +74,6 @@ const FILTERS = [
 ];
 
 export default function PatientHelpSupport() {
-  const [tickets, setTickets] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [statusFilter, setStatusFilter] = useState("ALL");
 
@@ -90,35 +89,26 @@ export default function PatientHelpSupport() {
     message: "",
   });
 
-  const [supportEmail, setSupportEmail] = useState("sayantan.das@codeclouds.com");
-
-  const fetchSettings = async () => {
-    try {
+  const { data: supportEmail = "support@teleclinic.com" } = useQuery({
+    queryKey: ["patient-support-settings"],
+    queryFn: async () => {
       const { data } = await api.get("/settings");
-      if (data?.data?.supportEmail) {
-        setSupportEmail(data.data.supportEmail);
-      }
-    } catch {
-      // fallback
-    }
-  };
+      return data?.data?.supportEmail || "support@teleclinic.com";
+    },
+  });
 
-  const fetchTickets = async () => {
-    try {
-      setLoading(true);
+  const {
+    data: tickets = [],
+    isLoading: loading,
+    refetch: fetchTickets,
+  } = useQuery({
+    queryKey: ["patient-my-tickets"],
+    queryFn: async () => {
       const { data } = await api.get("/support/my-tickets");
-      setTickets(data?.data || []);
-    } catch (err) {
-      console.error("Failed to load support tickets:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTickets();
-    fetchSettings();
-  }, []);
+      return data?.data || [];
+    },
+    meta: { onError: (err) => console.error("Failed to load support tickets:", err) },
+  });
 
   const stats = useMemo(
     () => ({

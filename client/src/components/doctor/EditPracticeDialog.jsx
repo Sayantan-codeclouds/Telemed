@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import doctorApi from "../../api/doctorApi";
 
 import {
@@ -21,42 +21,26 @@ export default function EditPracticeDialog({
 
 }) {
 
-  const [form, setForm] = useState({
+  const emptyForm = { hospital: "", consultationFee: "", biography: "", languages: "" };
+  const buildForm = (d) =>
+    d
+      ? {
+          hospital: d.hospital || "",
+          consultationFee: d.consultationFee || "",
+          biography: d.biography || "",
+          languages: d.languages?.join(", ") || "",
+        }
+      : emptyForm;
 
-    hospital: "",
+  const [form, setForm] = useState(() => buildForm(doctor));
+  const [seededFrom, setSeededFrom] = useState(doctor);
 
-    consultationFee: "",
-
-    biography: "",
-
-    languages: "",
-
-  });
+  if (doctor !== seededFrom) {
+    setSeededFrom(doctor);
+    setForm(buildForm(doctor));
+  }
 
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-
-    if (doctor) {
-
-      setForm({
-
-        hospital: doctor.hospital || "",
-
-        consultationFee:
-          doctor.consultationFee || "",
-
-        biography:
-          doctor.biography || "",
-
-        languages:
-          doctor.languages?.join(", ") || "",
-
-      });
-
-    }
-
-  }, [doctor]);
 
   const handleChange = (e) => {
 

@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Tag,
   Gift,
@@ -31,10 +32,11 @@ const COUPON_TYPES = [
   { value: "GIFT_CARD", label: "Digital Gift Card / Credit", icon: Gift },
 ];
 
+const COUPONS_QUERY_KEY = ["admin-coupons"];
+
 export default function AdminCoupons() {
   const { formatPrice, currencySign } = useCurrency();
-  const [coupons, setCoupons] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   // Filters & Sorting
   const [search, setSearch] = useState("");
@@ -63,21 +65,24 @@ export default function AdminCoupons() {
     status: "ACTIVE",
   });
 
-  const fetchCoupons = async () => {
-    try {
+  const {
+    data: coupons = [],
+    isLoading: loading,
+    refetch: fetchCoupons,
+  } = useQuery({
+    queryKey: COUPONS_QUERY_KEY,
+    queryFn: async () => {
       const res = await adminApi.get("/coupons/admin");
-      setCoupons(res.data?.data || []);
-    } catch (error) {
-      console.error("Failed to load coupons:", error);
-      toast.error("Failed to load discount coupons and gift cards.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return res.data?.data || [];
+    },
+    meta: { errorMessage: "Failed to load discount coupons and gift cards." },
+  });
 
-  useEffect(() => {
-    fetchCoupons();
-  }, []);
+  const setCoupons = (updater) => {
+    queryClient.setQueryData(COUPONS_QUERY_KEY, (prev) =>
+      typeof updater === "function" ? updater(prev || []) : updater
+    );
+  };
 
   const handleOpenAddModal = () => {
     setEditingCoupon(null);

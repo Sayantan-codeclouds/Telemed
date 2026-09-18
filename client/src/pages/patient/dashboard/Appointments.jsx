@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Calendar as CalendarIcon,
@@ -37,44 +38,42 @@ const STATUS_TABS = [
   { key: "CANCELLED", label: "Cancelled" },
 ];
 
+const APPOINTMENTS_QUERY_KEY = ["patient-appointments"];
+const REVIEWS_QUERY_KEY = ["patient-my-reviews"];
+
 export default function Appointments() {
   const navigate = useNavigate();
   const { formatPrice } = useCurrency();
-  const [appointments, setAppointments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("ALL");
   const [search, setSearch] = useState("");
   const [cancellingId, setCancellingId] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [reviewModalAppointment, setReviewModalAppointment] = useState(null);
   const [rescheduleAppointment, setRescheduleAppointment] = useState(null);
-  const [myReviews, setMyReviews] = useState([]);
 
-  const fetchAppointments = async () => {
-    try {
+  const { data: appointments = [], isLoading: loading, refetch: fetchAppointments } = useQuery({
+    queryKey: APPOINTMENTS_QUERY_KEY,
+    queryFn: async () => {
       const res = await api.get("/appointments/patient");
-      setAppointments(res.data?.data || []);
-    } catch (err) {
-      console.error("Failed to load appointments:", err);
-      toast.error("Failed to load appointments.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return res.data?.data || [];
+    },
+    meta: { errorMessage: "Failed to load appointments." },
+  });
 
-  const fetchPatientReviews = async () => {
-    try {
+  const { data: myReviews = [], refetch: fetchPatientReviews } = useQuery({
+    queryKey: REVIEWS_QUERY_KEY,
+    queryFn: async () => {
       const res = await api.get("/reviews/my-reviews");
-      setMyReviews(res.data?.data || []);
-    } catch {
-      // Quiet fail
-    }
-  };
+      return res.data?.data || [];
+    },
+  });
 
-  useEffect(() => {
-    fetchAppointments();
-    fetchPatientReviews();
-  }, []);
+  const setAppointments = (updater) => {
+    queryClient.setQueryData(APPOINTMENTS_QUERY_KEY, (prev) =>
+      typeof updater === "function" ? updater(prev || []) : updater
+    );
+  };
 
   const getExistingReview = (appt) => {
     if (!appt || !myReviews || myReviews.length === 0) return null;
@@ -660,6 +659,7 @@ export default function Appointments() {
       {/* Reschedule Modal */}
       {rescheduleAppointment && (
         <RescheduleModal
+          key={rescheduleAppointment._id}
           isOpen={Boolean(rescheduleAppointment)}
           onClose={() => setRescheduleAppointment(null)}
           appointment={rescheduleAppointment}

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ShoppingBag,
   Search,
@@ -70,24 +71,32 @@ const statusConfig = {
 };
 
 export default function AdminOrders() {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [updatingId, setUpdatingId] = useState(null);
   const [resendingId, setResendingId] = useState(null);
   const [viewOrder, setViewOrder] = useState(null);
 
-  const fetchOrders = async () => {
-    try {
+  const ORDERS_QUERY_KEY = ["admin-pharmacy-orders"];
+
+  const {
+    data: orders = [],
+    isLoading: loading,
+    refetch: fetchOrders,
+  } = useQuery({
+    queryKey: ORDERS_QUERY_KEY,
+    queryFn: async () => {
       const { data } = await adminApi.get("/admin/pharmacy/orders");
-      setOrders(data.data || []);
-    } catch (error) {
-      console.error("Failed to load pharmacy orders:", error);
-      toast.error("Failed to load orders.");
-    } finally {
-      setLoading(false);
-    }
+      return data.data || [];
+    },
+    meta: { errorMessage: "Failed to load orders." },
+  });
+
+  const setOrders = (updater) => {
+    queryClient.setQueryData(ORDERS_QUERY_KEY, (prev) =>
+      typeof updater === "function" ? updater(prev || []) : updater
+    );
   };
 
   const handleResendInvoice = async (order) => {
@@ -297,10 +306,6 @@ export default function AdminOrders() {
       setSubmittingCreate(false);
     }
   };
-
-  useEffect(() => {
-    fetchOrders();
-  }, []);
 
   const handleStatusChange = async (orderId, newStatus) => {
     setUpdatingId(orderId);

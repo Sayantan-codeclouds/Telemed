@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Key, Layers, CheckCircle2, Loader2, Save, RefreshCw, Zap,
   ShieldCheck, ToggleLeft, ToggleRight, Info, Mail, LifeBuoy,
@@ -208,20 +209,20 @@ const DEFAULT_FORM = {
   apiKey: "", campaignId: 1, prepaidCampaignId: 2, routeId: 1,
   connectionId: 1, shippingProfileId: 1, paymentMethodId: 1, cardTypeId: 1,
   action: "process", currencySign: "$",
-  supportEmail: "sayantan.das@codeclouds.com",
-  doctorSupportEmail: "sayantan.das@codeclouds.com",
+  supportEmail: "support@teleclinic.com",
+  doctorSupportEmail: "support@teleclinic.com",
   isEnabled: true, isTestMode: false,
   // Multi-provider mail
   mailProvider: "resend",
   mailApiKey: "",
-  mailFromEmail: "TeleClinic Support <noreply@sayantandas.in>",
+  mailFromEmail: "TeleClinic Support <noreply@teleclinic.com>",
   smtpHost: "",
   smtpPort: 587,
   smtpUser: "",
   smtpPass: "",
   smtpSecure: false,
   resendApiKey: "",
-  resendFromEmail: "TeleClinic Support <noreply@sayantandas.in>",
+  resendFromEmail: "TeleClinic Support <noreply@teleclinic.com>",
   // Multi-provider AI
   aiProvider: "groq",
   aiApiKey: "",
@@ -264,7 +265,6 @@ const DEFAULT_FORM = {
 
 export default function AdminCrmSettings() {
   const [activeTab, setActiveTab] = useState("general");
-  const [loading,   setLoading]   = useState(true);
   const [saving,    setSaving]    = useState(false);
   const [showApiKey,            setShowApiKey]            = useState(false);
   const [showMailApiKey,        setShowMailApiKey]        = useState(false);
@@ -278,13 +278,8 @@ export default function AdminCrmSettings() {
   const [aiTestResult,     setAiTestResult]     = useState(null);
   const [formData, setFormData] = useState(DEFAULT_FORM);
 
-  const fetchSettings = async () => {
-    try {
-      setLoading(true);
-      const res = await adminApi.get("/admin/crm-settings");
-      if (res.data?.data) {
-        const d = res.data.data;
-        setFormData({
+  const transformSettings = (d) => {
+    return {
           apiKey:              d.apiKey              || "",
           campaignId:          d.campaignId           ?? 1,
           prepaidCampaignId:   d.prepaidCampaignId    ?? 2,
@@ -295,20 +290,20 @@ export default function AdminCrmSettings() {
           cardTypeId:          d.cardTypeId           ?? 1,
           action:              d.action              || "process",
           currencySign:        d.currencySign         || "$",
-          supportEmail:        d.supportEmail         || "sayantan.das@codeclouds.com",
-          doctorSupportEmail:  d.doctorSupportEmail   || "sayantan.das@codeclouds.com",
+          supportEmail:        d.supportEmail         || "support@teleclinic.com",
+          doctorSupportEmail:  d.doctorSupportEmail   || "support@teleclinic.com",
           isEnabled:           d.isEnabled            ?? true,
           isTestMode:          d.isTestMode           ?? false,
           mailProvider:        d.mailProvider         || "resend",
           mailApiKey:          d.mailApiKey           || d.resendApiKey || "",
-          mailFromEmail:       d.mailFromEmail        || d.resendFromEmail || "TeleClinic Support <noreply@sayantandas.in>",
+          mailFromEmail:       d.mailFromEmail        || d.resendFromEmail || "TeleClinic Support <noreply@teleclinic.com>",
           smtpHost:            d.smtpHost             || "",
           smtpPort:            d.smtpPort             ?? 587,
           smtpUser:            d.smtpUser             || "",
           smtpPass:            d.smtpPass             || "",
           smtpSecure:          d.smtpSecure           ?? false,
           resendApiKey:        d.resendApiKey         || "",
-          resendFromEmail:     d.resendFromEmail      || "TeleClinic Support <noreply@sayantandas.in>",
+          resendFromEmail:     d.resendFromEmail      || "TeleClinic Support <noreply@teleclinic.com>",
           aiProvider:          d.aiProvider           || "groq",
           aiApiKey:            d.aiApiKey             || d.groqApiKey || "",
           aiModel:             d.aiModel              || "",
@@ -339,17 +334,26 @@ export default function AdminCrmSettings() {
           checkoutChampCustomBaseUrl: d.checkoutChampCustomBaseUrl || "https://api.checkoutchamp.com",
           checkoutChampConsultationCampaignId: d.checkoutChampConsultationCampaignId ?? 1,
           checkoutChampConsultationProductId: d.checkoutChampConsultationProductId ?? 3366,
-          checkoutChampConsultationShippingId: d.checkoutChampConsultationShippingId ?? 1,
-        });
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to load settings.");
-    } finally {
-      setLoading(false);
-    }
+      checkoutChampConsultationShippingId: d.checkoutChampConsultationShippingId ?? 1,
+    };
   };
 
-  useEffect(() => { fetchSettings(); }, []);
+  const { data: settingsData, isLoading: loading, refetch: fetchSettings } = useQuery({
+    queryKey: ["admin-crm-settings"],
+    queryFn: async () => {
+      const res = await adminApi.get("/admin/crm-settings");
+      return res.data?.data || null;
+    },
+    meta: { errorMessage: "Failed to load settings." },
+  });
+
+  // Seed the editable form once when settings arrive, adjusting state
+  // during render instead of via an effect.
+  const [appliedSettingsData, setAppliedSettingsData] = useState(undefined);
+  if (settingsData && settingsData !== appliedSettingsData) {
+    setAppliedSettingsData(settingsData);
+    setFormData(transformSettings(settingsData));
+  }
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;

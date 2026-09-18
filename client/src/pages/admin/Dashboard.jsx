@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   Users,
@@ -64,35 +65,28 @@ function StatCard({ label, value, icon: Icon, color, loading, subtitle }) {
 }
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState(null);
-  const [recentAppointments, setRecentAppointments] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [clearing, setClearing] = useState(false);
 
-  const fetchDashboardData = async () => {
-    try {
+  const {
+    data: { stats, recentAppointments } = { stats: null, recentAppointments: [] },
+    isLoading: loading,
+    refetch: fetchDashboardData,
+  } = useQuery({
+    queryKey: ["admin-dashboard"],
+    queryFn: async () => {
       const [statsRes, apptRes] = await Promise.allSettled([
         adminApi.get("/admin/dashboard"),
         adminApi.get("/admin/appointments"),
       ]);
 
-      if (statsRes.status === "fulfilled") {
-        setStats(statsRes.value.data?.data || null);
-      }
-      if (apptRes.status === "fulfilled") {
-        setRecentAppointments(apptRes.value.data?.data?.slice(0, 6) || []);
-      }
-    } catch (error) {
-      console.error("Failed to load admin dashboard:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+      return {
+        stats: statsRes.status === "fulfilled" ? statsRes.value.data?.data || null : null,
+        recentAppointments:
+          apptRes.status === "fulfilled" ? apptRes.value.data?.data?.slice(0, 6) || [] : [],
+      };
+    },
+  });
 
   const handleSeedDemoData = async () => {
     setSeeding(true);

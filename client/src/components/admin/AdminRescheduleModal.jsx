@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -22,14 +23,6 @@ export default function AdminRescheduleModal({
   onClose,
   onSuccess,
 }) {
-  const [selectedDate, setSelectedDate] = useState("");
-  const [slots, setSlots] = useState([]);
-  const [selectedSlot, setSelectedSlot] = useState(null);
-  const [reason, setReason] = useState("");
-  const [newStatus, setNewStatus] = useState("CONFIRMED");
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-
   // Generate next 14 days
   const upcomingDays = useMemo(() => {
     const days = [];
@@ -51,38 +44,35 @@ export default function AdminRescheduleModal({
     return days;
   }, []);
 
+  // A `key={appointment._id}` on this component at the call site ensures a
+  // fresh mount (and therefore fresh initial state) whenever the target
+  // appointment changes, so these only need to be set once at mount.
+  const [selectedDate, setSelectedDate] = useState(() => upcomingDays[0]?.dateString || "");
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [reason, setReason] = useState("");
+  const [newStatus, setNewStatus] = useState("CONFIRMED");
+  const [submitting, setSubmitting] = useState(false);
+
   const doctorId = appointment?.doctor?._id || appointment?.doctor;
 
-  useEffect(() => {
-    if (isOpen && upcomingDays.length > 0) {
-      const firstDate = upcomingDays[0].dateString;
-      setSelectedDate(firstDate);
-      fetchSlots(firstDate);
-    }
-    setSelectedSlot(null);
-    setReason("");
-    setNewStatus("CONFIRMED");
-  }, [isOpen, appointment]);
-
-  const fetchSlots = async (date) => {
-    if (!doctorId || !date) return;
-    setLoadingSlots(true);
-    try {
-      const res = await adminApi.get(`/doctors/${doctorId}/available-slots?date=${date}`);
-      setSlots(res.data?.data || []);
-      setSelectedSlot(null);
-    } catch (err) {
-      console.error("Failed to load available doctor slots:", err);
-      setSlots([]);
-      toast.error("Could not load doctor's available slots for this date.");
-    } finally {
-      setLoadingSlots(false);
-    }
-  };
+  const {
+    data: slots = [],
+    isFetching: loadingSlots,
+  } = useQuery({
+    queryKey: ["doctor-available-slots", doctorId, selectedDate],
+    queryFn: async () => {
+      const res = await adminApi.get(`/doctors/${doctorId}/available-slots?date=${selectedDate}`);
+      return res.data?.data || [];
+    },
+    enabled: isOpen && !!doctorId && !!selectedDate,
+    meta: {
+      onError: () => toast.error("Could not load doctor's available slots for this date."),
+    },
+  });
 
   const handleDateChange = (date) => {
     setSelectedDate(date);
-    fetchSlots(date);
+    setSelectedSlot(null);
   };
 
   const handleRescheduleSubmit = async () => {

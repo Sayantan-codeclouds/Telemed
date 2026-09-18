@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Calendar as CalendarIcon,
@@ -31,55 +32,42 @@ const STATUS_TABS = [
   { key: "ALL", label: "All History" },
 ];
 
+const APPOINTMENTS_QUERY_KEY = ["doctor-appointments"];
+
 export default function DoctorAppointments() {
   const navigate = useNavigate();
   const { formatPrice } = useCurrency();
-  const [appointments, setAppointments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("TODAY");
   const [search, setSearch] = useState("");
   const [updatingId, setUpdatingId] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
-  const [patientLabReports, setPatientLabReports] = useState([]);
-  const [loadingLabReports, setLoadingLabReports] = useState(false);
 
-  const fetchAppointments = async () => {
-    try {
+  const { data: appointments = [], isLoading: loading } = useQuery({
+    queryKey: APPOINTMENTS_QUERY_KEY,
+    queryFn: async () => {
       const res = await doctorApi.get("/appointments/doctor");
-      setAppointments(res.data?.data || []);
-    } catch (err) {
-      console.error("Failed to load appointments:", err);
-      toast.error("Failed to load clinical appointments.");
-    } finally {
-      setLoading(false);
-    }
+      return res.data?.data || [];
+    },
+    meta: { errorMessage: "Failed to load clinical appointments." },
+  });
+
+  const setAppointments = (updater) => {
+    queryClient.setQueryData(APPOINTMENTS_QUERY_KEY, (prev) =>
+      typeof updater === "function" ? updater(prev || []) : updater
+    );
   };
 
-  useEffect(() => {
-    fetchAppointments();
-  }, []);
-
-  useEffect(() => {
-    if (selectedAppointment?.patient?._id) {
-      const fetchPatientReports = async () => {
-        setLoadingLabReports(true);
-        try {
-          const res = await doctorApi.get(
-            `/lab-reports/doctor/patient/${selectedAppointment.patient._id}`
-          );
-          setPatientLabReports(res.data?.data || []);
-        } catch (err) {
-          console.error("Failed to load patient lab reports:", err);
-          setPatientLabReports([]);
-        } finally {
-          setLoadingLabReports(false);
-        }
-      };
-      fetchPatientReports();
-    } else {
-      setPatientLabReports([]);
-    }
-  }, [selectedAppointment]);
+  const patientId = selectedAppointment?.patient?._id;
+  const { data: patientLabReports = [], isFetching: loadingLabReports } = useQuery({
+    queryKey: ["doctor-patient-lab-reports", patientId],
+    queryFn: async () => {
+      const res = await doctorApi.get(`/lab-reports/doctor/patient/${patientId}`);
+      return res.data?.data || [];
+    },
+    enabled: !!patientId,
+    meta: { onError: (err) => console.error("Failed to load patient lab reports:", err) },
+  });
 
   const handleStatusUpdate = async (appointmentId, newStatus) => {
     setUpdatingId(appointmentId);

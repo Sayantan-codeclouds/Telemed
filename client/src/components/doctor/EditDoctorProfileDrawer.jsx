@@ -81,8 +81,13 @@ export default function EditDoctorProfileDrawer({
     formState: { isSubmitting },
   } = useForm();
 
-  useEffect(() => {
-    if (!doctor) return;
+  // Re-seed the form and photo preview whenever a different doctor is loaded
+  // or the drawer is (re)opened, without a set-state-in-effect: this adjusts
+  // state during render (React's documented pattern for this), tracking the
+  // last [doctor, open] combo the form was seeded from.
+  const [seededFrom, setSeededFrom] = useState({ doctor: null, open: false });
+  if (doctor && (doctor !== seededFrom.doctor || open !== seededFrom.open)) {
+    setSeededFrom({ doctor, open });
 
     reset({
       firstName: doctor.firstName || "",
@@ -108,7 +113,7 @@ export default function EditDoctorProfileDrawer({
       doctor.profileImage ||
         `https://ui-avatars.com/api/?name=${doctor.firstName}+${doctor.lastName}&background=16a34a&color=fff&size=200`
     );
-  }, [doctor, reset, open]);
+  }
 
   // Handle ESC key to close modal
   useEffect(() => {

@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   Users,
@@ -30,43 +31,32 @@ const getSafeStoredDoctor = () => {
   }
 };
 
+const EMPTY_DASHBOARD = { profile: null, appointments: [], prescriptions: [] };
+
 export default function DoctorDashboard() {
   const { formatPrice, currencySign } = useCurrency();
-  const [profile, setProfile] = useState(null);
-  const [appointments, setAppointments] = useState([]);
-  const [prescriptions, setPrescriptions] = useState([]);
-  const [loading, setLoading] = useState(true);
-
   const storedDoctor = useMemo(() => getSafeStoredDoctor(), []);
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
+  const {
+    data: { profile, appointments, prescriptions } = EMPTY_DASHBOARD,
+    isLoading: loading,
+    refetch: fetchDashboardData,
+  } = useQuery({
+    queryKey: ["doctor-dashboard"],
+    queryFn: async () => {
       const [profileRes, apptRes, presRes] = await Promise.allSettled([
         doctorApi.get("/doctors/profile"),
         doctorApi.get("/appointments/doctor"),
         doctorApi.get("/prescriptions/doctor"),
       ]);
 
-      if (profileRes.status === "fulfilled") {
-        setProfile(profileRes.value.data?.data || null);
-      }
-      if (apptRes.status === "fulfilled") {
-        setAppointments(apptRes.value.data?.data || []);
-      }
-      if (presRes.status === "fulfilled") {
-        setPrescriptions(presRes.value.data?.data || []);
-      }
-    } catch (error) {
-      console.error("Doctor dashboard data load error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+      return {
+        profile: profileRes.status === "fulfilled" ? profileRes.value.data?.data || null : null,
+        appointments: apptRes.status === "fulfilled" ? apptRes.value.data?.data || [] : [],
+        prescriptions: presRes.status === "fulfilled" ? presRes.value.data?.data || [] : [],
+      };
+    },
+  });
 
   const doctorName = profile?.firstName || storedDoctor?.firstName || "Doctor";
   const safeAppointments = Array.isArray(appointments) ? appointments : [];

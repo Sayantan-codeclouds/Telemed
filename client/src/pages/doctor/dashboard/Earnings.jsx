@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Wallet,
   DollarSign,
@@ -24,26 +25,24 @@ import doctorApi from "@/api/doctorApi";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { getProfileImageUrl } from "@/utils/imageUrl";
 
+const EMPTY_EARNINGS_DATA = {
+  summary: {
+    grossEarnings: 0,
+    platformCommissionPercent: 10,
+    platformFeeTotal: 0,
+    netEarnings: 0,
+    totalWithdrawn: 0,
+    pendingWithdrawn: 0,
+    availableBalance: 0,
+    completedConsultationsCount: 0,
+  },
+  payoutSettings: {},
+  monthlyData: [],
+  consultationLedger: [],
+};
+
 export default function DoctorEarnings() {
   const { formatPrice } = useCurrency();
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState({
-    summary: {
-      grossEarnings: 0,
-      platformCommissionPercent: 10,
-      platformFeeTotal: 0,
-      netEarnings: 0,
-      totalWithdrawn: 0,
-      pendingWithdrawn: 0,
-      availableBalance: 0,
-      completedConsultationsCount: 0,
-    },
-    payoutSettings: {},
-    monthlyData: [],
-    consultationLedger: [],
-  });
-
-  const [payouts, setPayouts] = useState([]);
   const [activeTab, setActiveTab] = useState("LEDGER"); // "LEDGER" | "PAYOUTS" | "SETTINGS"
   const [searchLedger, setSearchLedger] = useState("");
 
@@ -65,39 +64,42 @@ export default function DoctorEarnings() {
   });
   const [savingSettings, setSavingSettings] = useState(false);
 
-  const fetchEarningsData = async () => {
-    try {
+  const {
+    data: { data, payouts } = { data: EMPTY_EARNINGS_DATA, payouts: [] },
+    isLoading: loading,
+    refetch: fetchEarningsData,
+  } = useQuery({
+    queryKey: ["doctor-earnings"],
+    queryFn: async () => {
       const [earningsRes, payoutsRes] = await Promise.all([
         doctorApi.get("/doctors/earnings"),
         doctorApi.get("/doctors/payouts"),
       ]);
+      return {
+        data: earningsRes.data?.data || {},
+        payouts: payoutsRes.data?.data || [],
+      };
+    },
+    meta: { errorMessage: "Failed to load earnings information." },
+  });
 
-      const earningsData = earningsRes.data?.data || {};
-      setData(earningsData);
-      setPayouts(payoutsRes.data?.data || []);
-
-      if (earningsData.payoutSettings) {
-        setSettingsForm({
-          accountHolderName: earningsData.payoutSettings.accountHolderName || "",
-          bankName: earningsData.payoutSettings.bankName || "",
-          accountNumber: earningsData.payoutSettings.accountNumber || "",
-          routingOrIfsc: earningsData.payoutSettings.routingOrIfsc || "",
-          upiId: earningsData.payoutSettings.upiId || "",
-          paypalEmail: earningsData.payoutSettings.paypalEmail || "",
-          preferredMethod: earningsData.payoutSettings.preferredMethod || "BANK_TRANSFER",
-        });
-      }
-    } catch (err) {
-      console.error("Failed to load doctor earnings:", err);
-      toast.error("Failed to load earnings information.");
-    } finally {
-      setLoading(false);
+  // Seed the editable payout settings form once when earnings data arrives,
+  // adjusted during render instead of via an effect.
+  const [appliedData, setAppliedData] = useState(undefined);
+  if (data && data !== appliedData) {
+    setAppliedData(data);
+    if (data.payoutSettings) {
+      setSettingsForm({
+        accountHolderName: data.payoutSettings.accountHolderName || "",
+        bankName: data.payoutSettings.bankName || "",
+        accountNumber: data.payoutSettings.accountNumber || "",
+        routingOrIfsc: data.payoutSettings.routingOrIfsc || "",
+        upiId: data.payoutSettings.upiId || "",
+        paypalEmail: data.payoutSettings.paypalEmail || "",
+        preferredMethod: data.payoutSettings.preferredMethod || "BANK_TRANSFER",
+      });
     }
-  };
-
-  useEffect(() => {
-    fetchEarningsData();
-  }, []);
+  }
 
   // Filter consultation ledger
   const filteredLedger = useMemo(() => {

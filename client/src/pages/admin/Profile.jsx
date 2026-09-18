@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   User,
   ShieldCheck,
@@ -27,10 +28,11 @@ import { toast } from "sonner";
 import adminApi from "@/api/adminApi";
 import { getProfileImageUrl } from "@/utils/imageUrl";
 
+const PROFILE_QUERY_KEY = ["admin-profile"];
+
 export default function AdminProfile() {
   const fileInputRef = useRef(null);
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState(null);
+  const queryClient = useQueryClient();
 
   // Profile Info Form State
   const [infoForm, setInfoForm] = useState({
@@ -56,39 +58,42 @@ export default function AdminProfile() {
   const [updatingPassword, setUpdatingPassword] = useState(false);
 
   // Fetch admin profile
-  const fetchProfile = async () => {
-    try {
-      setLoading(true);
+  const {
+    data: profile = null,
+    isLoading: loading,
+  } = useQuery({
+    queryKey: PROFILE_QUERY_KEY,
+    queryFn: async () => {
       const { data } = await adminApi.get("/admin/profile");
       const adminData = data.data;
-      setProfile(adminData);
-      setInfoForm({
-        firstName: adminData.firstName || "",
-        lastName: adminData.lastName || "",
-        phone: adminData.phone || "",
-      });
-      setAvatarPreview(adminData.profileImage || null);
 
       // Update local storage copy
       const stored = JSON.parse(localStorage.getItem("admin") || "{}");
-      localStorage.setItem(
-        "admin",
-        JSON.stringify({
-          ...stored,
-          ...adminData,
-        })
-      );
-    } catch (err) {
-      console.error("Failed to load admin profile:", err);
-      toast.error(err.response?.data?.message || "Failed to load profile.");
-    } finally {
-      setLoading(false);
-    }
+      localStorage.setItem("admin", JSON.stringify({ ...stored, ...adminData }));
+
+      return adminData;
+    },
+    meta: { errorMessage: "Failed to load profile." },
+  });
+
+  const setProfile = (updater) => {
+    queryClient.setQueryData(PROFILE_QUERY_KEY, (prev) =>
+      typeof updater === "function" ? updater(prev) : updater
+    );
   };
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
+  // Seed the editable form/avatar preview once when the profile first
+  // arrives, adjusted during render instead of via an effect.
+  const [seededFrom, setSeededFrom] = useState(null);
+  if (profile && profile !== seededFrom) {
+    setSeededFrom(profile);
+    setInfoForm({
+      firstName: profile.firstName || "",
+      lastName: profile.lastName || "",
+      phone: profile.phone || "",
+    });
+    setAvatarPreview(profile.profileImage || null);
+  }
 
   // Handle Photo File Selection & Upload
   const handlePhotoSelect = async (e) => {
