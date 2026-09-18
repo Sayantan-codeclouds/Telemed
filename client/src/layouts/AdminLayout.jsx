@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import { Outlet } from "react-router-dom";
 import AdminSidebar from "../components/admin/AdminSidebar";
 import AdminHeader from "../components/admin/AdminHeader";
+import PageLoader from "../components/common/PageLoader";
 
 export default function AdminLayout() {
   return (
@@ -11,7 +13,9 @@ export default function AdminLayout() {
         <AdminHeader />
 
         <main className="flex-1 p-8 overflow-y-auto">
-          <Outlet />
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>
