@@ -32,6 +32,12 @@ import adminApi from "@/api/adminApi";
 
 const STATUS_FILTERS = ["ALL", "PROCESSING", "CONFIRMED", "SHIPPED", "DELIVERED", "COMPLETED", "CANCELLED"];
 
+const ORDER_TYPE_FILTERS = [
+  { key: "ALL", label: "All Orders", icon: null },
+  { key: "CONSULTATION", label: "Doctor Consultations", icon: Stethoscope },
+  { key: "PHARMACY", label: "Pharmacy Orders", icon: Pill },
+];
+
 const statusConfig = {
   PENDING: {
     color: "bg-amber-50 text-amber-700 border-amber-200",
@@ -74,6 +80,7 @@ export default function AdminOrders() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
+  const [selectedType, setSelectedType] = useState("ALL");
   const [updatingId, setUpdatingId] = useState(null);
   const [resendingId, setResendingId] = useState(null);
   const [viewOrder, setViewOrder] = useState(null);
@@ -346,7 +353,12 @@ export default function AdminOrders() {
     const matchesStatus =
       selectedStatus === "ALL" || order.status === selectedStatus;
 
-    return matchesSearch && matchesStatus;
+    // Orders predating the consultation flow have no orderType, so treat a
+    // missing value as PHARMACY (same convention as the patient Orders view).
+    const matchesType =
+      selectedType === "ALL" || (order.orderType || "PHARMACY") === selectedType;
+
+    return matchesSearch && matchesStatus && matchesType;
   });
 
   const counts = {
@@ -355,6 +367,12 @@ export default function AdminOrders() {
     shipped: orders.filter((o) => o.status === "SHIPPED").length,
     delivered: orders.filter((o) => o.status === "DELIVERED").length,
     cancelled: orders.filter((o) => o.status === "CANCELLED").length,
+  };
+
+  const typeCounts = {
+    ALL: orders.length,
+    CONSULTATION: orders.filter((o) => o.orderType === "CONSULTATION").length,
+    PHARMACY: orders.filter((o) => (o.orderType || "PHARMACY") === "PHARMACY").length,
   };
 
   const totalRevenue = orders
@@ -451,7 +469,39 @@ export default function AdminOrders() {
       </div>
 
       {/* Filter and Search Bar */}
-      <Card className="border border-slate-200/80 shadow-xs rounded-3xl bg-white p-4">
+      <Card className="border border-slate-200/80 shadow-xs rounded-3xl bg-white p-4 space-y-3">
+        {/* Order Type Tabs */}
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-3 overflow-x-auto">
+          {ORDER_TYPE_FILTERS.map((t) => {
+            const Icon = t.icon;
+            const isActive = selectedType === t.key;
+
+            return (
+              <button
+                key={t.key}
+                onClick={() => setSelectedType(t.key)}
+                className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? "bg-slate-900 text-white shadow-md shadow-slate-900/20"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                {Icon && <Icon className="w-3.5 h-3.5" />}
+                <span>{t.label}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                    isActive
+                      ? "bg-white/20 text-white"
+                      : "bg-white text-slate-600 border border-slate-200"
+                  }`}
+                >
+                  {typeCounts[t.key]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
           <div className="relative w-full md:w-80">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
