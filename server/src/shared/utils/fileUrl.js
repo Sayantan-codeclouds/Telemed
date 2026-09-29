@@ -43,9 +43,15 @@ const refreshAppUrlCache = () => {
 };
 
 /**
- * Resolves the active backend/app domain dynamically from CRM settings or environment.
- * Stays synchronous (many call sites format images without awaiting) by serving the
- * last-known DB value and refreshing it in the background on a short TTL.
+ * Resolves the active backend/app domain for building asset URLs.
+ *
+ * APP_URL wins: an environment knows its own host best, and letting the shared
+ * CRM setting override it would make local/staging serve production asset URLs.
+ * The DB value is the fallback for when APP_URL isn't reaching the process
+ * (the original reason images fell back to localhost in production).
+ *
+ * Stays synchronous (many call sites format images without awaiting) by serving
+ * the last-known DB value and refreshing it in the background on a short TTL.
  */
 export const getEffectiveAppUrl = () => {
   if (Date.now() - cachedAppUrlAt > APP_URL_CACHE_TTL_MS) {
@@ -53,8 +59,8 @@ export const getEffectiveAppUrl = () => {
   }
 
   return (
-    cachedAppUrl ||
     process.env.APP_URL ||
+    cachedAppUrl ||
     process.env.RENDER_EXTERNAL_URL ||
     (process.env.NODE_ENV === "production" ? "https://telemed-zuls.onrender.com" : "http://localhost:5000")
   ).replace(/\/+$/, "");

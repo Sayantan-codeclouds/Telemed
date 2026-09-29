@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import api from "@/api/axios";
+import { getProfileImageUrl, handleAvatarError } from "@/utils/imageUrl";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
 export default function Doctors() {
@@ -409,10 +410,15 @@ export default function Doctors() {
                 {/* Doctor Avatar & Status */}
                 <div className="flex items-start gap-4">
                   <img
-                    src={
-                      doctor.profileImage ||
-                      `https://ui-avatars.com/api/?name=${doctor.firstName}+${doctor.lastName}&background=2563eb&color=ffffff`
-                    }
+                    src={getProfileImageUrl(
+                      doctor.profileImage,
+                      `${doctor.firstName} ${doctor.lastName}`,
+                      "2563eb"
+                    )}
+                    onError={handleAvatarError(
+                      `${doctor.firstName} ${doctor.lastName}`,
+                      "2563eb"
+                    )}
                     alt={doctor.firstName}
                     className="w-18 h-18 rounded-2xl object-cover border-2 border-slate-100 shadow-xs shrink-0 group-hover:scale-105 transition-transform"
                   />
