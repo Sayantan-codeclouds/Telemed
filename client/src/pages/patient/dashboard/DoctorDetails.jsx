@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import api from "@/api/axios";
+import { getProfileImageUrl, handleAvatarError } from "@/utils/imageUrl";
 import DoctorReviewModal from "@/components/patient/DoctorReviewModal";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
@@ -89,8 +90,6 @@ export default function DoctorDetails() {
   const { formatPrice } = useCurrency();
 
   const [selectedDate, setSelectedDate] = useState("");
-  const [slots, setSlots] = useState([]);
-  const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [reason, setReason] = useState("");
   const [booking, setBooking] = useState(false);
@@ -231,33 +230,29 @@ export default function DoctorDetails() {
     return days;
   }, [doctor]);
 
-  // Select first available day by default
-  useEffect(() => {
-    if (doctor && upcomingDays.length > 0 && !selectedDate) {
-      const firstAvail = upcomingDays.find((d) => d.isAvailable);
-      if (firstAvail) {
-        handleDateSelect(firstAvail.dateString);
-      }
+  // Default to the first available day, adjusted during render rather than in
+  // an effect. Picking the date is all that's needed — the slots query below is
+  // keyed on it, so the fetch follows declaratively.
+  if (doctor && upcomingDays.length > 0 && !selectedDate) {
+    const firstAvail = upcomingDays.find((d) => d.isAvailable);
+    if (firstAvail) {
+      setSelectedDate(firstAvail.dateString);
     }
-  }, [doctor, upcomingDays]);
+  }
 
-  const fetchSlots = async (date) => {
-    setLoadingSlots(true);
-    try {
-      const res = await api.get(`/doctors/${id}/available-slots?date=${date}`);
-      setSlots(res.data?.data || []);
-      setSelectedSlot(null);
-    } catch (err) {
-      console.error("Failed to fetch slots:", err);
-      setSlots([]);
-    } finally {
-      setLoadingSlots(false);
-    }
-  };
+  const { data: slots = [], isFetching: loadingSlots } = useQuery({
+    queryKey: ["doctor-available-slots", id, selectedDate],
+    queryFn: async () => {
+      const res = await api.get(`/doctors/${id}/available-slots?date=${selectedDate}`);
+      return res.data?.data || [];
+    },
+    enabled: !!id && !!selectedDate,
+    meta: { onError: (err) => console.error("Failed to fetch slots:", err) },
+  });
 
-  const handleDateSelect = async (date) => {
+  const handleDateSelect = (date) => {
     setSelectedDate(date);
-    await fetchSlots(date);
+    setSelectedSlot(null);
   };
 
   const handleCustomDateChange = async (e) => {
@@ -277,7 +272,7 @@ export default function DoctorDetails() {
     }
 
     setSelectedDate(date);
-    await fetchSlots(date);
+    setSelectedSlot(null);
   };
 
   const detectedCard = useMemo(() => {
@@ -485,10 +480,15 @@ export default function DoctorDetails() {
             {/* Avatar */}
             <div className="relative shrink-0 mx-auto md:mx-0">
               <img
-                src={
-                  doctor.profileImage ||
-                  `https://ui-avatars.com/api/?name=${doctor.firstName}+${doctor.lastName}&background=0D9488&color=fff&size=200`
-                }
+                src={getProfileImageUrl(
+                  doctor.profileImage,
+                  `${doctor.firstName} ${doctor.lastName}`,
+                  "0D9488"
+                )}
+                onError={handleAvatarError(
+                  `${doctor.firstName} ${doctor.lastName}`,
+                  "0D9488"
+                )}
                 alt={`Dr. ${doctor.firstName} ${doctor.lastName}`}
                 className="w-32 h-32 sm:w-36 sm:h-36 rounded-3xl object-cover border-4 border-slate-100 shadow-md"
               />
@@ -1456,6 +1456,10 @@ export default function DoctorDetails() {
                       <div className="flex items-center gap-3">
                         <img
                           src={avatar}
+                          onError={handleAvatarError(
+                            r.isAnonymous ? "Verified Patient" : reviewerName,
+                            r.isAnonymous ? "64748b" : "0284c7"
+                          )}
                           alt={reviewerName}
                           className="w-10 h-10 rounded-xl object-cover border border-slate-200"
                         />
