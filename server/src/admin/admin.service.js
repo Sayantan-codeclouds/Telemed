@@ -17,6 +17,7 @@ import {
   getProfileImage,
   getProfileImageFilename,
 } from "../shared/utils/fileUrl.js";
+import { uploadToCloud } from "../shared/utils/cloudStorage.js";
 
 
 /* =================== Auth =================== */
@@ -936,7 +937,8 @@ export const uploadAdminProfilePhotoService = async (adminId, file) => {
     }
   }
 
-  admin.profileImage = file.filename;
+  const cloudUrl = await uploadToCloud(file.path, "profile-images");
+  admin.profileImage = cloudUrl || file.filename;
   await admin.save();
 
   return {

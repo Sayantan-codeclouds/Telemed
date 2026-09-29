@@ -16,6 +16,7 @@ import {
   changeDoctorPassword,
 } from "./doctor.service.js";
 import { getProfileImage } from "../shared/utils/fileUrl.js";
+import { uploadToCloud } from "../shared/utils/cloudStorage.js";
 
 export const verifyEmail = async (req, res) => {
   try {
@@ -108,9 +109,11 @@ export const uploadProfilePhoto = async (req, res) => {
       });
     }
 
+    const cloudUrl = await uploadToCloud(req.file.path, "profile-images");
+
     const doctor = await uploadDoctorProfilePhoto(
       req.doctor._id,
-      req.file.filename
+      cloudUrl || req.file.filename
     );
 
     return res.status(200).json({
@@ -138,9 +141,14 @@ export const uploadSignatureAndStamp = async (req, res) => {
       });
     }
 
+    const [signatureUrl, stampUrl] = await Promise.all([
+      signatureFile ? uploadToCloud(signatureFile.path, "signatures") : null,
+      stampFile ? uploadToCloud(stampFile.path, "signatures") : null,
+    ]);
+
     const doctor = await uploadDoctorSignatureAndStamp(req.doctor._id, {
-      signatureFilename: signatureFile?.filename,
-      stampFilename: stampFile?.filename,
+      signatureFilename: signatureUrl || signatureFile?.filename,
+      stampFilename: stampUrl || stampFile?.filename,
     });
 
     return res.status(200).json({

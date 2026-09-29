@@ -6,6 +6,7 @@ import Patient from "../patients/patient.model.js";
 import Appointment from "../appointments/appointment.model.js";
 import { createNotificationService } from "../notifications/notification.service.js";
 import { formatLabReport } from "../shared/utils/fileUrl.js";
+import { uploadToCloud, deleteFromCloud } from "../shared/utils/cloudStorage.js";
 
 export const createLabReport = async (patientId, file, data) => {
   if (!file) {
@@ -17,7 +18,12 @@ export const createLabReport = async (patientId, file, data) => {
     throw new Error("Patient not found.");
   }
 
-  const relativeFilename = path.basename(file.path);
+  // Prefer permanent cloud storage: lab reports are medical records and must
+  // survive deploys, unlike the server's ephemeral local disk.
+  const cloudUrl = await uploadToCloud(file.path, "lab-reports", {
+    mimetype: file.mimetype,
+  });
+  const storedFileRef = cloudUrl || path.basename(file.path);
 
   const report = await LabReport.create({
     patient: patientId,
@@ -28,7 +34,7 @@ export const createLabReport = async (patientId, file, data) => {
     testDate: data.testDate ? new Date(data.testDate) : new Date(),
     labName: data.labName || "",
     notes: data.notes || "",
-    fileUrl: relativeFilename,
+    fileUrl: storedFileRef,
     fileName: file.originalname,
     fileType: file.mimetype,
     fileSize: file.size,
@@ -125,15 +131,20 @@ export const deleteLabReport = async (reportId, patientId) => {
     throw new Error("Report not found or unauthorized.");
   }
 
-  // Attempt to delete physical file
-  try {
-    const filename = path.basename(report.fileUrl);
-    const filePath = path.join(process.cwd(), "src", "uploads", "lab-reports", filename);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+  // Remove the underlying file so a deleted medical record doesn't linger in
+  // storage. Cloud-hosted reports are full URLs; older ones are local files.
+  if (/^https?:\/\//i.test(report.fileUrl || "")) {
+    await deleteFromCloud(report.fileUrl);
+  } else {
+    try {
+      const filename = path.basename(report.fileUrl);
+      const filePath = path.join(process.cwd(), "src", "uploads", "lab-reports", filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (err) {
+      console.error("Error removing lab report file:", err);
     }
-  } catch (err) {
-    console.error("Error removing lab report file:", err);
   }
 
   await LabReport.deleteOne({ _id: reportId });

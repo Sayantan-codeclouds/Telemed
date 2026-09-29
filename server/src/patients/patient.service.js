@@ -15,6 +15,7 @@ import {
   getProfileImage,
   getProfileImageFilename,
 } from "../shared/utils/fileUrl.js";
+import { uploadToCloud } from "../shared/utils/cloudStorage.js";
 
 export const registerPatient = async (patientData) => {
   // Validate request
@@ -255,8 +256,9 @@ export const uploadPatientProfilePhoto = async (patientId, file) => {
     throw new Error("Patient not found.");
   }
 
-  // Delete previous image
-  if (patient.profileImage) {
+  // Delete previous image (only ever a local file — cloud-hosted images are
+  // full URLs and are left to Cloudinary's own lifecycle).
+  if (patient.profileImage && !/^https?:\/\//i.test(patient.profileImage)) {
     const oldImage = path.join(
       process.cwd(),
       "src",
@@ -270,7 +272,8 @@ export const uploadPatientProfilePhoto = async (patientId, file) => {
     }
   }
 
-  patient.profileImage = file.filename;
+  const cloudUrl = await uploadToCloud(file.path, "profile-images");
+  patient.profileImage = cloudUrl || file.filename;
 
   await patient.save();
 
