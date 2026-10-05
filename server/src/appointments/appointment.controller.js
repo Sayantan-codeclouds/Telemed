@@ -1,3 +1,4 @@
+import { assertAppointmentParticipant } from "../shared/middleware/authenticateDoctorOrPatient.js";
 import {
   createAppointment,
   getAppointmentById,
@@ -56,12 +57,14 @@ export const getAppointment = async (req, res) => {
       req.params.id
     );
 
+    assertAppointmentParticipant(appointment, req);
+
     return res.json({
       success: true,
       data: appointment,
     });
   } catch (error) {
-    return res.status(404).json({
+    return res.status(error.statusCode || 404).json({
       success: false,
       message: error.message,
     });
@@ -175,7 +178,8 @@ export const changeAppointmentStatus =
       const appointment =
         await updateAppointmentStatus(
           req.params.id,
-          status
+          status,
+          req.doctor._id
         );
 
       return res.json({
@@ -242,9 +246,10 @@ export const saveDoctorNotes = async (
 
     const appointment =
       await updateDoctorNotes(
-        req.params.id,
-        doctorNotes
-      );
+          req.params.id,
+          doctorNotes,
+          req.doctor._id
+        );
 
     return res.json({
       success: true,
@@ -274,7 +279,8 @@ export const savePrescription =
       const appointment =
         await updatePrescription(
           req.params.id,
-          prescription
+          prescription,
+          req.doctor._id
         );
 
       return res.json({
@@ -306,9 +312,10 @@ export const saveAISummary = async (
 
     const appointment =
       await updateAISummary(
-        req.params.id,
-        aiSummary
-      );
+          req.params.id,
+          aiSummary,
+          req.doctor._id
+        );
 
     return res.json({
       success: true,

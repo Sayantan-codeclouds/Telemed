@@ -307,13 +307,23 @@ export const validateAndApplyGiftCardService = async ({ code, orderTotal }) => {
     throw AppError.badRequest(`Gift Card "${cleanCode}" is inactive or disabled.`);
   }
 
-  if (card.dateExpire && new Date(card.dateExpire) < new Date()) {
+  // Valid through the whole (UTC) expiry date, not just until its first instant.
+  const expiresAt = card.dateExpire ? new Date(card.dateExpire) : null;
+  if (expiresAt) expiresAt.setUTCHours(23, 59, 59, 999);
+  if (expiresAt && expiresAt < new Date()) {
     throw AppError.badRequest(`Gift Card "${cleanCode}" expired on ${new Date(card.dateExpire).toLocaleDateString()}.`);
+  }
+
+  let currencySign = "$";
+  try {
+    currencySign = (await getCrmSettingsService())?.currencySign || "$";
+  } catch {
+    // keep default
   }
 
   const availableBalance = Number(card.balanceAmount !== undefined ? card.balanceAmount : card.totalAmount);
   if (availableBalance <= 0) {
-    throw AppError.badRequest(`Gift Card "${cleanCode}" has $0.00 remaining balance.`);
+    throw AppError.badRequest(`Gift Card "${cleanCode}" has ${currencySign}0.00 remaining balance.`);
   }
 
   // Calculate amount to apply (up to the order total or available balance)
@@ -325,6 +335,6 @@ export const validateAndApplyGiftCardService = async ({ code, orderTotal }) => {
     totalAmount: card.totalAmount,
     availableBalance,
     applyAmount: Math.round(applyAmount * 100) / 100,
-    message: `🎁 Gift Card applied! Covered $${applyAmount.toFixed(2)} with gift card balance.`,
+    message: `🎁 Gift Card applied! Covered ${currencySign}${applyAmount.toFixed(2)} with gift card balance.`,
   };
 };

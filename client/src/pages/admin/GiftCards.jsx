@@ -61,7 +61,7 @@ export default function AdminGiftCards() {
     queryFn: async () => {
       const [res, crmRes] = await Promise.allSettled([
         adminApi.get("/gift-cards"),
-        adminApi.get("/admin/crm-settings"),
+        adminApi.get("/admin/crm-settings/summary"),
       ]);
       return {
         giftCards: res.status === "fulfilled" ? res.value.data?.data || [] : [],

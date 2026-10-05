@@ -2,8 +2,9 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import Patient from "../patients/patient.model.js";
 import Doctor from "../doctors/doctor.model.js";
-import { authenticateAdmin } from "../admin/admin.middleware.js";
+import { authenticateAdmin, authorizeRoles } from "../admin/admin.middleware.js";
 import { authenticateDoctor } from "../doctors/doctor.middleware.js";
+import rateLimit from "../shared/middleware/rateLimit.js";
 import {
   submitSupportTicket,
   getMySupportTickets,
@@ -13,6 +14,9 @@ import {
 } from "./support.controller.js";
 
 const router = express.Router();
+
+// Ticket submission sends emails, so it is limited to prevent spam.
+const submitLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
 
 /**
  * Helper middleware that optionally identifies patient or doctor from token
@@ -76,16 +80,16 @@ const requirePatientOrDoctorAuth = async (req, res, next) => {
 };
 
 // ── Patient & Doctor Routes ──
-router.post("/submit", optionalAuth, submitSupportTicket);
+router.post("/submit", submitLimiter, optionalAuth, submitSupportTicket);
 router.get("/my-tickets", requirePatientOrDoctorAuth, getMySupportTickets);
 
 // ── Doctor-Authenticated Routes (ensures doctor is always properly identified) ──
-router.post("/doctor/submit", authenticateDoctor, submitSupportTicket);
+router.post("/doctor/submit", submitLimiter, authenticateDoctor, submitSupportTicket);
 router.get("/doctor/my-tickets", authenticateDoctor, getMySupportTickets);
 
 // ── Admin Routes ──
 router.get("/admin/tickets", authenticateAdmin, getAllSupportTicketsAdmin);
 router.patch("/admin/tickets/:id", authenticateAdmin, updateSupportTicketAdmin);
-router.delete("/admin/tickets/:id", authenticateAdmin, deleteSupportTicketAdmin);
+router.delete("/admin/tickets/:id", authenticateAdmin, authorizeRoles("SuperAdmin", "Admin"), deleteSupportTicketAdmin);
 
 export default router;

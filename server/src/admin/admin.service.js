@@ -18,14 +18,71 @@ import {
   getProfileImageFilename,
 } from "../shared/utils/fileUrl.js";
 import { uploadToCloud } from "../shared/utils/cloudStorage.js";
+import { sendAccountSetupEmail } from "../mail/mail.service.js";
+import { generateTotpSecret, verifyTotpCode, buildOtpAuthUrl } from "../shared/utils/totp.js";
+import crypto from "crypto";
+
+/* =================== Admin-created account credentials =================== */
+
+const ACCOUNT_SETUP_HOURS = 72;
+
+/**
+ * Resolves the initial credentials for an account an admin creates.
+ * - If the admin typed a password it is used (min 8 characters).
+ * - Otherwise the account gets an unguessable random password plus a
+ *   set-password token that is emailed to the user.
+ */
+const resolveInitialCredentials = (password) => {
+  const typed = typeof password === "string" ? password.trim() : "";
+  if (typed) {
+    if (typed.length < 8) {
+      throw AppError.badRequest("Password must be at least 8 characters, or leave it blank to email a set-password link.");
+    }
+    return { password: typed, setupToken: null };
+  }
+  return {
+    password: crypto.randomBytes(32).toString("hex"),
+    setupToken: crypto.randomBytes(32).toString("hex"),
+  };
+};
+
+const sendSetupEmailSafely = async ({ email, firstName, role, token }) => {
+  try {
+    // The mailer returns null (without throwing) when no provider is configured.
+    const result = await sendAccountSetupEmail({ email, firstName, role, token, expiresInHours: ACCOUNT_SETUP_HOURS });
+    return Boolean(result);
+  } catch (err) {
+    console.error(`[Admin] Failed to send account setup email to ${email}:`, err?.message || err);
+    return false;
+  }
+};
 
 
 /* =================== Auth =================== */
 
-export const loginAdmin = async ({ email, password }) => {
+/** Signs an admin session token bound to the admin's current tokenVersion. */
+export const signAdminToken = (admin) =>
+  jwt.sign(
+    { adminId: admin._id, role: admin.role, tv: admin.tokenVersion || 0 },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+  );
+
+const adminSessionPayload = (admin) => ({
+  id: admin._id,
+  firstName: admin.firstName,
+  lastName: admin.lastName,
+  email: admin.email,
+  phone: admin.phone || "",
+  profileImage: getProfileImage(admin.profileImage),
+  role: admin.role,
+  twoFactorEnabled: Boolean(admin.twoFactorEnabled),
+});
+
+export const loginAdmin = async ({ email, password, totpCode }) => {
   const admin = await Admin.findOne({
     email: email.toLowerCase(),
-  }).select("+password");
+  }).select("+password +twoFactorSecret");
 
   if (!admin) {
     throw AppError.unauthorized("Invalid email or password.");
@@ -41,25 +98,103 @@ export const loginAdmin = async ({ email, password }) => {
     throw AppError.unauthorized("Invalid email or password.");
   }
 
-  const token = jwt.sign(
-    { adminId: admin._id, role: admin.role },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
-  );
+  // Second step: password was right, now an authenticator code is needed.
+  if (admin.twoFactorEnabled) {
+    if (!totpCode) {
+      return { twoFactorRequired: true };
+    }
+    if (!verifyTotpCode(admin.twoFactorSecret, totpCode)) {
+      throw AppError.unauthorized("Invalid authentication code.");
+    }
+  }
 
   return {
-    token,
-    admin: {
-      id: admin._id,
-      firstName: admin.firstName,
-      lastName: admin.lastName,
-      email: admin.email,
-      phone: admin.phone || "",
-      profileImage: getProfileImage(admin.profileImage),
-      role: admin.role,
-    },
+    token: signAdminToken(admin),
+    admin: adminSessionPayload(admin),
   };
 };
+
+/* =================== Two-Factor Login (TOTP) =================== */
+
+export const startTwoFactorSetupService = async (adminId) => {
+  const admin = await Admin.findById(adminId);
+  if (!admin) throw AppError.notFound("Admin not found.");
+  if (admin.twoFactorEnabled) {
+    throw AppError.badRequest("Two-factor login is already enabled.");
+  }
+
+  const secret = generateTotpSecret();
+  admin.twoFactorPendingSecret = secret;
+  await admin.save();
+
+  return { secret, otpauthUrl: buildOtpAuthUrl({ secret, accountName: admin.email }) };
+};
+
+export const enableTwoFactorService = async (adminId, code) => {
+  const admin = await Admin.findById(adminId).select("+twoFactorPendingSecret");
+  if (!admin) throw AppError.notFound("Admin not found.");
+  if (!admin.twoFactorPendingSecret) {
+    throw AppError.badRequest("Start two-factor setup first.");
+  }
+  if (!verifyTotpCode(admin.twoFactorPendingSecret, String(code || ""))) {
+    throw AppError.badRequest("That code is not valid. Check your authenticator app and try again.");
+  }
+
+  admin.twoFactorSecret = admin.twoFactorPendingSecret;
+  admin.twoFactorPendingSecret = null;
+  admin.twoFactorEnabled = true;
+  // Sign out other sessions, which were opened without the second factor.
+  admin.tokenVersion = (admin.tokenVersion || 0) + 1;
+  await admin.save();
+
+  return { token: signAdminToken(admin), admin: adminSessionPayload(admin) };
+};
+
+export const disableTwoFactorService = async (adminId, { password, code }) => {
+  const admin = await Admin.findById(adminId).select("+password +twoFactorSecret");
+  if (!admin) throw AppError.notFound("Admin not found.");
+  if (!admin.twoFactorEnabled) {
+    throw AppError.badRequest("Two-factor login is not enabled.");
+  }
+  if (!password || !(await bcrypt.compare(password, admin.password))) {
+    throw AppError.badRequest("Current password is incorrect.");
+  }
+  if (!verifyTotpCode(admin.twoFactorSecret, String(code || ""))) {
+    throw AppError.badRequest("That code is not valid.");
+  }
+
+  admin.twoFactorEnabled = false;
+  admin.twoFactorSecret = null;
+  admin.twoFactorPendingSecret = null;
+  admin.tokenVersion = (admin.tokenVersion || 0) + 1;
+  await admin.save();
+
+  return { token: signAdminToken(admin), admin: adminSessionPayload(admin) };
+};
+
+/* =================== Demo Tools Guard =================== */
+
+// Demo seeding/clearing is for local and showcase environments only. It is
+// off unless ENABLE_DEMO_TOOLS=true is set explicitly.
+export const isDemoToolsEnabled = () => process.env.ENABLE_DEMO_TOOLS === "true";
+
+const assertDemoToolsEnabled = () => {
+  if (!isDemoToolsEnabled()) {
+    throw AppError.forbidden("Demo data tools are disabled on this server (set ENABLE_DEMO_TOOLS=true to enable).");
+  }
+};
+
+const DEMO_DOCTOR_EMAILS = [
+  "dr.arun@teleclinic.com",
+  "dr.sneha@teleclinic.com",
+  "dr.vikram@teleclinic.com",
+  "dr.meera@teleclinic.com",
+];
+const DEMO_PATIENT_EMAILS = [
+  "patient.rahul@teleclinic.com",
+  "patient.priya@teleclinic.com",
+  "patient.amit@teleclinic.com",
+];
 
 /* =================== Dashboard Stats =================== */
 
@@ -72,8 +207,8 @@ export const getDashboardStats = async () => {
     completedAppointments,
     cancelledAppointments,
   ] = await Promise.all([
-    Patient.countDocuments(),
-    Doctor.countDocuments({ isEmailVerified: true }),
+    Patient.countDocuments({ deletedAt: null }),
+    Doctor.countDocuments({ isEmailVerified: true, deletedAt: null }),
     Appointment.countDocuments(),
     Appointment.countDocuments({ status: "PENDING" }),
     Appointment.countDocuments({ status: "COMPLETED" }),
@@ -87,16 +222,25 @@ export const getDashboardStats = async () => {
     pendingAppointments,
     completedAppointments,
     cancelledAppointments,
+    demoToolsEnabled: isDemoToolsEnabled(),
   };
 };
 
 /* =================== Patient Management =================== */
 
-export const getAllPatients = async () => {
-  return Patient.find()
-    .select("-password -verificationToken -verificationTokenExpires -resetPasswordToken -resetPasswordTokenExpires")
-    .sort({ createdAt: -1 });
+/** Applies optional { skip, limit } paging to a query. */
+const paginate = (query, paging) => (paging ? query.skip(paging.skip).limit(paging.limit) : query);
+
+export const getAllPatients = async (paging = null) => {
+  return paginate(
+    Patient.find({ deletedAt: null })
+      .select("-password -verificationToken -verificationTokenExpires -resetPasswordToken -resetPasswordTokenExpires")
+      .sort({ createdAt: -1 }),
+    paging
+  );
 };
+
+export const countPatients = () => Patient.countDocuments({ deletedAt: null });
 
 export const createPatientService = async (data) => {
   const { firstName, lastName, email, phone, password, gender, bloodGroup, dateOfBirth, status } = data;
@@ -115,8 +259,8 @@ export const createPatientService = async (data) => {
     throw AppError.badRequest("A patient with this phone number already exists.");
   }
 
-  const rawPassword = password && password.trim() ? password.trim() : "Password@123";
-  const hashedPassword = await bcrypt.hash(rawPassword, 10);
+  const credentials = resolveInitialCredentials(password);
+  const hashedPassword = await bcrypt.hash(credentials.password, 10);
 
   const patient = await Patient.create({
     firstName: firstName.trim(),
@@ -124,19 +268,30 @@ export const createPatientService = async (data) => {
     email: email.toLowerCase().trim(),
     phone: phone.trim(),
     password: hashedPassword,
-    gender: gender || "Male",
-    bloodGroup: bloodGroup || "O+",
+    // Medical details are only stored when actually provided.
+    gender: gender || null,
+    bloodGroup: bloodGroup || null,
     dateOfBirth: dateOfBirth || null,
     isEmailVerified: true,
     status: status || "ACTIVE",
+    ...(credentials.setupToken && {
+      resetPasswordToken: credentials.setupToken,
+      resetPasswordTokenExpires: new Date(Date.now() + ACCOUNT_SETUP_HOURS * 60 * 60 * 1000),
+    }),
   });
 
-  const created = await Patient.findById(patient._id).select("-password");
-  return created;
+  const setupEmailSent = credentials.setupToken
+    ? await sendSetupEmailSafely({ email: patient.email, firstName: patient.firstName, role: "patient", token: credentials.setupToken })
+    : null;
+
+  const created = await Patient.findById(patient._id).select(
+    "-password -verificationToken -verificationTokenExpires -resetPasswordToken -resetPasswordTokenExpires"
+  );
+  return { patient: created, setupEmailSent };
 };
 
 export const updatePatientStatus = async (patientId, status) => {
-  const patient = await Patient.findById(patientId);
+  const patient = await Patient.findOne({ _id: patientId, deletedAt: null });
   if (!patient) throw AppError.notFound("Patient not found.");
 
   patient.status = status;
@@ -159,27 +314,88 @@ export const updatePatientStatus = async (patientId, status) => {
 };
 
 export const deletePatientService = async (patientId) => {
-  const patient = await Patient.findById(patientId);
+  const patient = await Patient.findOne({ _id: patientId, deletedAt: null });
   if (!patient) throw AppError.notFound("Patient not found.");
 
-  await Promise.all([
-    Patient.findByIdAndDelete(patientId),
-    Appointment.deleteMany({ patient: patientId }),
-    Prescription.deleteMany({ patient: patientId }),
-    Order.deleteMany({ patient: patientId }),
-    Notification.deleteMany({ recipient: patientId }),
-  ]);
+  // Soft delete: medical and financial records (appointments, prescriptions,
+  // orders, lab reports) are retained. The login is disabled and the email /
+  // phone are released so the person can register again.
+  patient.deletedEmail = patient.email;
+  patient.deletedPhone = patient.phone;
+  patient.email = `deleted-${patient._id}@deleted.invalid`;
+  patient.phone = `deleted-${patient._id}`;
+  patient.status = "INACTIVE";
+  patient.deletedAt = new Date();
+  await patient.save();
 
-  return { success: true, message: "Patient and associated data deleted successfully." };
+  const cancelled = await cancelUpcomingAppointments({ patient: patient._id }, "doctor");
+
+  return {
+    success: true,
+    message: `Patient account deleted. Their records were kept${cancelled ? ` and ${cancelled} upcoming appointment(s) were cancelled` : ""}.`,
+  };
+};
+
+/**
+ * Cancels pending/confirmed future appointments matching `filter` and tells
+ * the other participant ("doctor" or "patient"). Returns the number cancelled.
+ */
+const cancelUpcomingAppointments = async (filter, notify) => {
+  const startOfToday = new Date();
+  startOfToday.setUTCHours(0, 0, 0, 0);
+
+  const upcoming = await Appointment.find({
+    ...filter,
+    status: { $in: ["PENDING", "CONFIRMED"] },
+    appointmentDate: { $gte: startOfToday },
+  });
+
+  for (const appointment of upcoming) {
+    appointment.status = "CANCELLED";
+    await appointment.save();
+
+    const date = new Date(appointment.appointmentDate).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+    await createNotificationService(
+      notify === "doctor"
+        ? {
+            recipient: appointment.doctor,
+            recipientModel: "Doctor",
+            title: "❌ Appointment Cancelled",
+            message: `The appointment on ${date} at ${appointment.slot?.start} was cancelled because the patient's account was closed.`,
+            type: "APPOINTMENT",
+            link: "/doctor/appointments",
+          }
+        : {
+            recipient: appointment.patient,
+            recipientModel: "Patient",
+            title: "❌ Appointment Cancelled",
+            message: `Your appointment on ${date} at ${appointment.slot?.start} was cancelled because the doctor is no longer available. Please contact support about a refund or book another doctor.`,
+            type: "APPOINTMENT",
+            link: "/patient/appointments",
+          }
+    ).catch(() => {});
+  }
+
+  return upcoming.length;
 };
 
 /* =================== Doctor Management =================== */
 
-export const getAllDoctorsAdmin = async () => {
-  return Doctor.find()
-    .select("-password -verificationToken -verificationTokenExpires -resetPasswordToken -resetPasswordTokenExpires")
-    .sort({ createdAt: -1 });
+export const getAllDoctorsAdmin = async (paging = null) => {
+  return paginate(
+    Doctor.find({ deletedAt: null })
+      .select("-password -verificationToken -verificationTokenExpires -resetPasswordToken -resetPasswordTokenExpires")
+      .sort({ createdAt: -1 }),
+    paging
+  );
 };
+
+export const countDoctorsAdmin = () => Doctor.countDocuments({ deletedAt: null });
 
 export const createDoctorService = async (data) => {
   const {
@@ -211,7 +427,7 @@ export const createDoctorService = async (data) => {
     throw AppError.badRequest("A doctor with this phone number already exists.");
   }
 
-  const rawPassword = password && password.trim() ? password.trim() : "Password@123";
+  const credentials = resolveInitialCredentials(password);
 
   // Standard initial availability: Monday to Friday
   const defaultAvailability = [
@@ -234,11 +450,12 @@ export const createDoctorService = async (data) => {
     lastName: lastName.trim(),
     email: email.toLowerCase().trim(),
     phone: phone.trim(),
-    password: rawPassword, // Doctor schema pre('save') will hash this with bcrypt
+    password: credentials.password, // Doctor schema pre('save') will hash this with bcrypt
     specialization: specialization || "General Physician",
-    hospital: hospital || "TeleClinic Medical Center",
+    // Credentials shown to patients are only stored when actually provided.
+    hospital: hospital || "",
     experience: Number(experience) || 0,
-    qualification: qualification || "MBBS",
+    qualification: qualification || "",
     licenseNumber: licenseNumber || "",
     consultationFee: Number(consultationFee) || 500,
     platformCommissionPercent:
@@ -248,16 +465,26 @@ export const createDoctorService = async (data) => {
     availability: defaultAvailability,
     isEmailVerified: true,
     status: status || "ACTIVE",
+    ...(credentials.setupToken && {
+      resetPasswordToken: credentials.setupToken,
+      resetPasswordTokenExpires: new Date(Date.now() + ACCOUNT_SETUP_HOURS * 60 * 60 * 1000),
+    }),
   });
 
   await doctor.save();
 
-  const created = await Doctor.findById(doctor._id).select("-password");
-  return created;
+  const setupEmailSent = credentials.setupToken
+    ? await sendSetupEmailSafely({ email: doctor.email, firstName: doctor.firstName, role: "doctor", token: credentials.setupToken })
+    : null;
+
+  const created = await Doctor.findById(doctor._id).select(
+    "-password -verificationToken -verificationTokenExpires -resetPasswordToken -resetPasswordTokenExpires -payoutSettings"
+  );
+  return { doctor: created, setupEmailSent };
 };
 
 export const updateDoctorStatus = async (doctorId, status) => {
-  const doctor = await Doctor.findById(doctorId);
+  const doctor = await Doctor.findOne({ _id: doctorId, deletedAt: null });
   if (!doctor) throw AppError.notFound("Doctor not found.");
 
   doctor.status = status;
@@ -327,23 +554,33 @@ export const updateDoctorCommissionService = async (doctorId, commissionPercent)
 };
 
 export const deleteDoctorService = async (doctorId) => {
-  const doctor = await Doctor.findById(doctorId);
+  const doctor = await Doctor.findOne({ _id: doctorId, deletedAt: null });
   if (!doctor) throw AppError.notFound("Doctor not found.");
 
-  await Promise.all([
-    Doctor.findByIdAndDelete(doctorId),
-    Appointment.deleteMany({ doctor: doctorId }),
-    Prescription.deleteMany({ doctor: doctorId }),
-    Notification.deleteMany({ recipient: doctorId }),
-  ]);
+  // Soft delete: appointments, prescriptions, earnings and payouts are kept.
+  // The doctor disappears from listings (no longer ACTIVE) and can't log in.
+  doctor.deletedEmail = doctor.email;
+  doctor.deletedPhone = doctor.phone;
+  doctor.email = `deleted-${doctor._id}@deleted.invalid`;
+  doctor.phone = `deleted-${doctor._id}`;
+  doctor.status = "INACTIVE";
+  doctor.deletedAt = new Date();
+  await doctor.save();
 
-  return { success: true, message: "Doctor and associated appointments deleted successfully." };
+  const cancelled = await cancelUpcomingAppointments({ doctor: doctor._id }, "patient");
+
+  return {
+    success: true,
+    message: `Doctor account deleted. Their records were kept${cancelled ? ` and ${cancelled} upcoming appointment(s) were cancelled (patients notified)` : ""}.`,
+  };
 };
 
 /* =================== Appointment Oversight =================== */
 
-export const getAllAppointments = async () => {
-  const appointments = await Appointment.find()
+export const countAppointments = () => Appointment.countDocuments();
+
+export const getAllAppointments = async (paging = null) => {
+  const appointments = await paginate(Appointment.find(), paging)
     .populate("patient", "firstName lastName email profileImage phone")
     .populate("doctor", "firstName lastName email specialization profileImage hospital")
     .sort({ createdAt: -1 });
@@ -378,6 +615,16 @@ export const rescheduleAppointmentByAdminService = async (
 
   if (appointment.status === "COMPLETED") {
     throw AppError.badRequest("Completed appointments cannot be rescheduled.");
+  }
+
+  if (appointment.status === "CANCELLED") {
+    throw AppError.badRequest("Cancelled appointments cannot be rescheduled; book a new appointment instead.");
+  }
+
+  // Rescheduling can only leave the appointment awaiting or confirmed;
+  // completing/cancelling has its own flow (and affects doctor earnings).
+  if (newStatus && !["PENDING", "CONFIRMED"].includes(newStatus)) {
+    throw AppError.badRequest("New status must be PENDING or CONFIRMED.");
   }
 
   const doctor = await Doctor.findById(appointment.doctor);
@@ -496,6 +743,8 @@ export const rescheduleAppointmentByAdminService = async (
 /* =================== Demo Data Seeding & Cleanup =================== */
 
 export const seedDemoDataService = async () => {
+  assertDemoToolsEnabled();
+
   const hashedPassword = await bcrypt.hash("Password@123", 10);
 
   // 1. Seed Demo Doctors
@@ -736,20 +985,6 @@ export const seedDemoDataService = async () => {
     await Medicine.insertMany(defaultMeds);
   }
 
-  // 5. Seed SuperAdmin if empty
-  let admin = await Admin.findOne({ email: "admin@teleclinic.com" });
-  if (!admin) {
-    const adminPassword = await bcrypt.hash("Admin@2026", 10);
-    await Admin.create({
-      firstName: "Admin",
-      lastName: "TeleClinic",
-      email: "admin@teleclinic.com",
-      password: adminPassword,
-      role: "SuperAdmin",
-      status: "ACTIVE",
-    });
-  }
-
   return {
     success: true,
     message: "Showcase demo data seeded successfully!",
@@ -761,17 +996,37 @@ export const seedDemoDataService = async () => {
 };
 
 export const clearDemoDataService = async () => {
-  await Promise.all([
-    Patient.deleteMany({ email: { $regex: "@teleclinic.com$" } }),
-    Doctor.deleteMany({ email: { $regex: "@teleclinic.com$" } }),
-    Appointment.deleteMany(),
-    Prescription.deleteMany(),
-    Order.deleteMany(),
+  assertDemoToolsEnabled();
+
+  // Only remove the seeded demo accounts and records that belong to them;
+  // real patients, doctors, appointments and orders are never touched.
+  const [demoDoctors, demoPatients] = await Promise.all([
+    Doctor.find({ email: { $in: DEMO_DOCTOR_EMAILS } }).select("_id"),
+    Patient.find({ email: { $in: DEMO_PATIENT_EMAILS } }).select("_id"),
+  ]);
+  const doctorIds = demoDoctors.map((d) => d._id);
+  const patientIds = demoPatients.map((p) => p._id);
+  const linkedToDemo = { $or: [{ doctor: { $in: doctorIds } }, { patient: { $in: patientIds } }] };
+
+  const [appointments, prescriptions, orders] = await Promise.all([
+    Appointment.deleteMany(linkedToDemo),
+    Prescription.deleteMany(linkedToDemo),
+    Order.deleteMany({ patient: { $in: patientIds } }),
+    Notification.deleteMany({ recipient: { $in: [...doctorIds, ...patientIds] } }),
+    Doctor.deleteMany({ _id: { $in: doctorIds } }),
+    Patient.deleteMany({ _id: { $in: patientIds } }),
   ]);
 
   return {
     success: true,
     message: "Demo showcase records cleared successfully.",
+    data: {
+      doctors: doctorIds.length,
+      patients: patientIds.length,
+      appointments: appointments.deletedCount,
+      prescriptions: prescriptions.deletedCount,
+      orders: orders.deletedCount,
+    },
   };
 };
 
@@ -838,6 +1093,7 @@ export const updateAdminRoleService = async (id, role, currentAdminId) => {
   }
 
   admin.role = role;
+  admin.tokenVersion = (admin.tokenVersion || 0) + 1; // re-login picks up the new role
   await admin.save();
 
   return Admin.findById(id).select("-password");
@@ -859,6 +1115,7 @@ export const updateAdminStatusService = async (id, status, currentAdminId) => {
   }
 
   admin.status = status;
+  admin.tokenVersion = (admin.tokenVersion || 0) + 1; // end existing sessions
   await admin.save();
 
   return Admin.findById(id).select("-password");
@@ -971,10 +1228,13 @@ export const changeAdminPasswordService = async (
 
   const hashedPassword = await bcrypt.hash(newPassword, 10);
   admin.password = hashedPassword;
+  // Sign out every other session; this one gets a fresh token below.
+  admin.tokenVersion = (admin.tokenVersion || 0) + 1;
   await admin.save();
 
   return {
-    message: "Password updated successfully.",
+    message: "Password updated successfully. Other sessions have been signed out.",
+    token: signAdminToken(admin),
   };
 };
 

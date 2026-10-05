@@ -109,6 +109,11 @@ export const loginPatient = async ({ email, password }) => {
 };
 
 export const verifyPatientEmail = async (token) => {
+  // Only accept a plain string so query operators like { $ne: null } can't be injected.
+  if (typeof token !== "string" || !token) {
+    throw new Error("Invalid verification token.");
+  }
+
   const patient = await Patient.findOne({
     verificationToken: token,
   });
@@ -138,8 +143,9 @@ export const forgotPassword = async (email) => {
     email: email.toLowerCase(),
   });
 
+  // Don't reveal whether the email is registered; the caller responds the same either way.
   if (!patient) {
-    throw new Error("Patient not found.");
+    return null;
   }
 
   const resetToken = crypto.randomBytes(32).toString("hex");
@@ -157,6 +163,14 @@ export const forgotPassword = async (email) => {
 };
 
 export const resetPassword = async (data) => {
+  // Only accept a plain string so query operators like { $ne: null } can't be injected.
+  if (typeof data?.token !== "string" || !data.token) {
+    throw new Error("Invalid or expired reset token.");
+  }
+  if (typeof data.password !== "string" || data.password.length < 8) {
+    throw new Error("Password must be at least 8 characters.");
+  }
+
   const patient = await Patient.findOne({
     resetPasswordToken: data.token,
     resetPasswordTokenExpires: {

@@ -52,11 +52,11 @@ export default function AdminDoctors() {
     lastName: "",
     email: "",
     phone: "",
-    password: "Password@123",
+    password: "",
     specialization: "General Physician",
-    hospital: "TeleClinic Medical Center",
-    experience: 5,
-    qualification: "MBBS",
+    hospital: "",
+    experience: "",
+    qualification: "",
     licenseNumber: "",
     consultationFee: 500,
     platformCommissionPercent: 10,
@@ -96,11 +96,11 @@ export default function AdminDoctors() {
       lastName: "",
       email: "",
       phone: "",
-      password: "Password@123",
+      password: "",
       specialization: specializations[0] || "General Physician",
-      hospital: "TeleClinic Medical Center",
-      experience: 5,
-      qualification: "MBBS",
+      hospital: "",
+      experience: "",
+      qualification: "",
       licenseNumber: "",
       consultationFee: 500,
       platformCommissionPercent: 10,
@@ -202,7 +202,7 @@ export default function AdminDoctors() {
   const handleDeleteDoctor = async (id, name) => {
     if (
       !window.confirm(
-        `Are you sure you want to permanently delete Dr. ${name} and all their consultation records?`
+        `Delete Dr. ${name}? Their login is disabled, they're removed from listings and upcoming appointments are cancelled (patients are notified). Consultation and payout records are kept.`
       )
     ) {
       return;
@@ -239,7 +239,8 @@ export default function AdminDoctors() {
       const matchesStatus =
         statusFilter === "ALL" ||
         (statusFilter === "ACTIVE" && d.status === "ACTIVE") ||
-        (statusFilter === "INACTIVE" && d.status !== "ACTIVE");
+        (statusFilter === "INACTIVE" && d.status !== "ACTIVE") ||
+        (statusFilter === "PENDING_APPROVAL" && d.status === "PENDING_APPROVAL");
 
       const matchesSpec =
         specFilter === "ALL" ||
@@ -287,6 +288,7 @@ export default function AdminDoctors() {
 
   const activeCount = doctors.filter((d) => d.status === "ACTIVE").length;
   const inactiveCount = doctors.filter((d) => d.status !== "ACTIVE").length;
+  const pendingCount = doctors.filter((d) => d.status === "PENDING_APPROVAL").length;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -342,6 +344,7 @@ export default function AdminDoctors() {
               <option value="ALL">All Statuses (Active & Inactive)</option>
               <option value="ACTIVE">🟢 Active Only (ON)</option>
               <option value="INACTIVE">⚪ Inactive Only (OFF)</option>
+              <option value="PENDING_APPROVAL">🟡 Pending Approval</option>
             </select>
           </div>
 
@@ -387,6 +390,7 @@ export default function AdminDoctors() {
             { id: "ALL", label: `All Doctors (${doctors.length})` },
             { id: "ACTIVE", label: `Active (${activeCount})` },
             { id: "INACTIVE", label: `Inactive (${inactiveCount})` },
+            { id: "PENDING_APPROVAL", label: `Pending Approval (${pendingCount})` },
           ].map((chip) => (
             <button
               key={chip.id}
@@ -485,6 +489,11 @@ export default function AdminDoctors() {
                               <p className="text-[11px] text-gray-400">
                                 {doctor.hospital || "TeleClinic Virtual Clinic"}
                               </p>
+                              {doctor.status === "PENDING_APPROVAL" && (
+                                <span className="inline-block mt-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5">
+                                  Pending approval: verify license, then switch ON
+                                </span>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -795,14 +804,14 @@ export default function AdminDoctors() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="docPassword">Temporary Password</Label>
+                  <Label htmlFor="docPassword">Temporary Password (optional)</Label>
                   <Input
                     id="docPassword"
                     type="text"
-                    placeholder="Password@123"
+                    placeholder="Blank = email a set-password link"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    required
+                    minLength={8}
                     className="rounded-xl font-mono text-xs"
                   />
                 </div>

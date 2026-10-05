@@ -5,8 +5,9 @@ import Doctor from "../doctors/doctor.model.js";
 import Patient from "../patients/patient.model.js";
 import { createNotificationService } from "../notifications/notification.service.js";
 import { formatAppointmentProfileImages } from "../shared/utils/fileUrl.js";
+import { PRIVATE_USER_FIELDS } from "../shared/middleware/authenticateDoctorOrPatient.js";
 import { getCrmSettingsService, processVrioOrderService } from "../pharmacy/vrio.service.js";
-import { incrementCouponUsageService } from "../coupons/coupon.service.js";
+import { validateAndApplyCouponService } from "../coupons/coupon.service.js";
 import { Order } from "../pharmacy/pharmacy.model.js";
 import { sendOrderInvoiceEmail } from "../mail/mail.service.js";
 
@@ -141,7 +142,13 @@ if (existingAppointment) {
   // ==========================
   const settings = await getCrmSettingsService();
   const fee = Number(doctor.consultationFee ?? 500);
-  const discount = Number(data.discountAmount || 0);
+  // The discount is recomputed from the coupon code; any amount sent by the
+  // client is ignored so the fee cannot be lowered by editing the request.
+  let discount = 0;
+  if (data.couponCode) {
+    const coupon = await validateAndApplyCouponService({ code: String(data.couponCode), orderTotal: fee, patientId: patient._id });
+    discount = coupon.discountValue;
+  }
   const finalFee = Math.max(0, Math.round((fee - discount) * 100) / 100);
 
   let paymentStatus = "PENDING";
@@ -225,14 +232,7 @@ if (existingAppointment) {
     vrioResponse = vrioResult.vrioResponse;
     paymentDetails.transactionId = String(vrioResult.vrioOrderId || "");
     paymentDetails.paidAt = new Date();
-
-    if (data.couponCode) {
-      try {
-        await incrementCouponUsageService(data.couponCode);
-      } catch (couponErr) {
-        console.warn("Could not increment coupon usage:", couponErr.message);
-      }
-    }
+    // Coupon usage is incremented by the CRM order service on success.
   } else {
     // Offline / Gateway disabled fallback
     paymentStatus = "PAID";
@@ -367,11 +367,11 @@ export const getAppointmentById =
       )
         .populate(
           "doctor",
-          "-password"
+          PRIVATE_USER_FIELDS
         )
         .populate(
           "patient",
-          "-password"
+          PRIVATE_USER_FIELDS
         );
 
     if (!appointment) {
@@ -431,18 +431,21 @@ export const getDoctorAppointments =
 export const updateAppointmentStatus =
   async (
     appointmentId,
-    status
+    status,
+    doctorId
   ) => {
 
+    // Only the appointment's own doctor may change it.
     const appointment =
-      await Appointment.findById(
-        appointmentId
-      );
+      await Appointment.findOne({
+        _id: appointmentId,
+        doctor: doctorId,
+      });
 
     if (!appointment) {
 
       throw new Error(
-        "Appointment not found."
+        "Appointment not found or unauthorized."
       );
 
     }
@@ -687,18 +690,21 @@ export const reschedulePatientAppointment = async (
 export const updateDoctorNotes =
   async (
     appointmentId,
-    doctorNotes
+    doctorNotes,
+    doctorId
   ) => {
 
+    // Only the appointment's own doctor may change it.
     const appointment =
-      await Appointment.findById(
-        appointmentId
-      );
+      await Appointment.findOne({
+        _id: appointmentId,
+        doctor: doctorId,
+      });
 
     if (!appointment) {
 
       throw new Error(
-        "Appointment not found."
+        "Appointment not found or unauthorized."
       );
 
     }
@@ -715,18 +721,21 @@ export const updateDoctorNotes =
 export const updatePrescription =
   async (
     appointmentId,
-    prescription
+    prescription,
+    doctorId
   ) => {
 
+    // Only the appointment's own doctor may change it.
     const appointment =
-      await Appointment.findById(
-        appointmentId
-      );
+      await Appointment.findOne({
+        _id: appointmentId,
+        doctor: doctorId,
+      });
 
     if (!appointment) {
 
       throw new Error(
-        "Appointment not found."
+        "Appointment not found or unauthorized."
       );
 
     }
@@ -743,18 +752,21 @@ export const updatePrescription =
 export const updateAISummary =
   async (
     appointmentId,
-    aiSummary
+    aiSummary,
+    doctorId
   ) => {
 
+    // Only the appointment's own doctor may change it.
     const appointment =
-      await Appointment.findById(
-        appointmentId
-      );
+      await Appointment.findOne({
+        _id: appointmentId,
+        doctor: doctorId,
+      });
 
     if (!appointment) {
 
       throw new Error(
-        "Appointment not found."
+        "Appointment not found or unauthorized."
       );
 
     }

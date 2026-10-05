@@ -191,6 +191,22 @@ pastSurgeries: [
 ],
 
 
+    // Soft delete: the account is deactivated and its records kept. The
+    // original email/phone move here so they can be registered again.
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    deletedEmail: {
+      type: String,
+      default: null,
+    },
+    deletedPhone: {
+      type: String,
+      default: null,
+    },
+
     status: {
       type: String,
       enum: ["ACTIVE", "INACTIVE", "BLOCKED"],

@@ -7,6 +7,7 @@ import Appointment from "../appointments/appointment.model.js";
 import { createNotificationService } from "../notifications/notification.service.js";
 import { formatLabReport } from "../shared/utils/fileUrl.js";
 import { uploadToCloud, deleteFromCloud } from "../shared/utils/cloudStorage.js";
+import escapeRegex from "../shared/utils/escapeRegex.js";
 
 export const createLabReport = async (patientId, file, data) => {
   if (!file) {
@@ -69,7 +70,7 @@ export const getPatientLabReports = async (patientId, query = {}) => {
     filter.reportType = query.reportType;
   }
   if (query.search) {
-    filter.title = { $regex: query.search, $options: "i" };
+    filter.title = { $regex: escapeRegex(query.search), $options: "i" };
   }
 
   const reports = await LabReport.find(filter)
@@ -116,6 +117,18 @@ export const getLabReportById = async (reportId, userId, userType) => {
 
   if (userType === "PATIENT" && String(report.patient._id) !== String(userId)) {
     throw new Error("Unauthorized access to this report.");
+  }
+
+  // Doctors get the same access as getDoctorPatientLabReports: reports assigned
+  // to them, or any report of a patient they have an appointment with.
+  if (userType === "DOCTOR") {
+    const assignedToDoctor = String(report.doctor?._id || report.doctor) === String(userId);
+    const hasConsulted =
+      assignedToDoctor ||
+      (await Appointment.exists({ doctor: userId, patient: report.patient._id }));
+    if (!hasConsulted) {
+      throw new Error("Unauthorized access to this report.");
+    }
   }
 
   return formatLabReport(report);

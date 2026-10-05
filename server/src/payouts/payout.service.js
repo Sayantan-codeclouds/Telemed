@@ -126,7 +126,27 @@ export const getDoctorPayoutsService = async (doctorId) => {
   return payouts;
 };
 
-export const requestDoctorPayoutService = async (doctorId, { amount, notes }) => {
+// Payout requests for the same doctor run one at a time, so two concurrent
+// requests can't both pass the available-balance check. (In-process only:
+// sufficient for a single API instance.)
+const payoutLocks = new Map();
+
+export const requestDoctorPayoutService = (doctorId, payload) => {
+  const key = String(doctorId);
+  const previous = payoutLocks.get(key) || Promise.resolve();
+  const current = previous
+    .catch(() => {})
+    .then(() => createDoctorPayoutRequest(doctorId, payload || {}));
+  payoutLocks.set(key, current);
+  current
+    .finally(() => {
+      if (payoutLocks.get(key) === current) payoutLocks.delete(key);
+    })
+    .catch(() => {});
+  return current;
+};
+
+const createDoctorPayoutRequest = async (doctorId, { amount, notes }) => {
   const numAmount = Number(amount);
   if (!numAmount || numAmount <= 0) {
     throw new Error("Please specify a valid withdrawal amount.");
@@ -230,6 +250,11 @@ export const updatePayoutStatusAdminService = async (
   payoutId,
   { status, referenceNumber, rejectionReason }
 ) => {
+  const validStatuses = Payout.schema.path("status").enumValues;
+  if (!validStatuses.includes(status)) {
+    throw new Error(`Invalid status. Must be one of: ${validStatuses.join(", ")}`);
+  }
+
   const payout = await Payout.findById(payoutId).populate("doctor", "firstName lastName email");
   if (!payout) {
     throw new Error("Payout record not found.");

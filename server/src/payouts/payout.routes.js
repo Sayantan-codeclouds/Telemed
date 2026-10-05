@@ -9,7 +9,7 @@ import {
   updateAdminPayoutStatus,
 } from "./payout.controller.js";
 import { authenticateDoctor } from "../doctors/doctor.middleware.js";
-import { authenticateAdmin } from "../admin/admin.middleware.js";
+import { authenticateAdmin, authorizeRoles } from "../admin/admin.middleware.js";
 
 const router = express.Router();
 
@@ -40,9 +40,9 @@ router.put("/doctor/payout-settings", authenticateDoctor, updatePayoutSettings);
 // ==========================================
 
 // List all doctor payouts
-router.get("/admin/payouts", authenticateAdmin, getAdminPayouts);
+router.get("/admin/payouts", authenticateAdmin, authorizeRoles("SuperAdmin", "Admin"), getAdminPayouts);
 
 // Approve, process, disburse, or reject payout
-router.patch("/admin/payouts/:id/status", authenticateAdmin, updateAdminPayoutStatus);
+router.patch("/admin/payouts/:id/status", authenticateAdmin, authorizeRoles("SuperAdmin", "Admin"), updateAdminPayoutStatus);
 
 export default router;

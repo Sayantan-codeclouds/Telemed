@@ -32,6 +32,14 @@ export const authenticateAdmin = async (req, res, next) => {
       });
     }
 
+    // Sessions are revoked by bumping tokenVersion (password/role/status change).
+    if ((decoded.tv || 0) !== (admin.tokenVersion || 0)) {
+      return res.status(401).json({
+        success: false,
+        message: "Your session has expired. Please sign in again.",
+      });
+    }
+
     req.admin = admin;
     next();
   } catch (error) {

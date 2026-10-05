@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
+import { escapeHtml } from "@/lib/utils";
 import api from "@/api/axios";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas-pro";
@@ -101,7 +102,9 @@ function MarkdownMessage({ content }) {
 
   const formatInline = (text) => {
     if (!text) return "";
-    return text
+    // Escape first: the text comes from the AI (which can echo user or
+    // lab-report content), so it must never be interpreted as HTML.
+    return escapeHtml(text)
       .replace(/\*\*(.*?)\*\*/g, "<strong class='font-bold text-slate-900'>$1</strong>")
       .replace(/\*(.*?)\*/g, "<em class='italic'>$1</em>")
       .replace(/`([^`]+)`/g, "<code class='bg-slate-100 text-purple-700 px-1 py-0.5 rounded text-[11px] font-mono'>$1</code>");
@@ -212,12 +215,12 @@ async function downloadElementAsPdf(element, fileName = "lab-report-analysis.pdf
         </div>
         <div>
           <h1 style="font-size: 17px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2;">TeleClinic AI</h1>
-          <p style="font-size: 11px; font-weight: 600; color: #64748b; margin: 0;">${options.subtitle || "AI Health & Clinical Lab Analysis"}</p>
+          <p style="font-size: 11px; font-weight: 600; color: #64748b; margin: 0;">${escapeHtml(options.subtitle || "AI Health & Clinical Lab Analysis")}</p>
         </div>
       </div>
       <div style="text-align: right;">
         <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; padding: 4px 10px; border-radius: 9999px; margin-bottom: 4px;">
-          ${options.reportName || "Clinical Report"}
+          ${escapeHtml(options.reportName || "Clinical Report")}
         </span>
         <p style="font-size: 10px; color: #94a3b8; margin: 0;">Generated: ${new Date().toLocaleString()}</p>
       </div>

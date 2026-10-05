@@ -5,6 +5,9 @@ import AppError from "../shared/errors/AppError.js";
 import { processVrioOrderService, detectCardType } from "./vrio.service.js";
 import { createNotificationService } from "../notifications/notification.service.js";
 import { sendOrderInvoiceEmail } from "../mail/mail.service.js";
+import { validateAndApplyCouponService } from "../coupons/coupon.service.js";
+import { validateAndApplyGiftCardService } from "../giftcards/giftcard.service.js";
+import escapeRegex from "../shared/utils/escapeRegex.js";
 
 
 const DEFAULT_MEDICINES = [
@@ -241,8 +244,8 @@ export const getMedicinesService = async (query = {}) => {
   }
   if (query.search) {
     filter.$or = [
-      { name: { $regex: query.search, $options: "i" } },
-      { genericName: { $regex: query.search, $options: "i" } },
+      { name: { $regex: escapeRegex(query.search), $options: "i" } },
+      { genericName: { $regex: escapeRegex(query.search), $options: "i" } },
     ];
   }
 
@@ -253,6 +256,57 @@ export const getMedicineByIdService = async (id) => {
   const medicine = await Medicine.findById(id);
   if (!medicine) throw AppError.notFound("Medicine not found.");
   return medicine;
+};
+
+const normalizeMedicineName = (value) => String(value || "").trim().toLowerCase();
+
+/**
+ * True when one of the patient's still-valid prescriptions names this
+ * medicine (by brand or generic name; prescriptions are free text, so a
+ * containment match is used, e.g. "Semaglutide 0.5mg" matches "Semaglutide").
+ */
+const isMedicinePrescribed = (medicine, prescriptions) => {
+  const names = [medicine.name, medicine.genericName].map(normalizeMedicineName).filter(Boolean);
+  return prescriptions.some((prescription) =>
+    (prescription.medicines || []).some((item) => {
+      const prescribed = normalizeMedicineName(item.name);
+      return prescribed && names.some((name) => prescribed.includes(name) || name.includes(prescribed));
+    })
+  );
+};
+
+/**
+ * Atomically takes `quantity` units of each item from stock. Returns a
+ * release() function that puts them back (used when payment fails).
+ * Throws if any item no longer has enough stock.
+ */
+const reserveStock = async (items) => {
+  const reserved = [];
+  const release = async () => {
+    for (const { medicine, quantity } of reserved) {
+      await Medicine.updateOne({ _id: medicine }, { $inc: { stockQuantity: quantity }, $set: { inStock: true } }).catch(
+        (err) => console.error("[Pharmacy] Failed to release reserved stock:", err?.message || err)
+      );
+    }
+  };
+
+  for (const item of items) {
+    const updated = await Medicine.findOneAndUpdate(
+      { _id: item.medicine, inStock: true, stockQuantity: { $gte: item.quantity } },
+      { $inc: { stockQuantity: -item.quantity } },
+      { new: true }
+    );
+    if (!updated) {
+      await release();
+      throw AppError.badRequest(`${item.name} does not have enough stock for this order.`);
+    }
+    reserved.push({ medicine: item.medicine, quantity: item.quantity });
+    if (updated.stockQuantity <= 0) {
+      await Medicine.updateOne({ _id: item.medicine }, { $set: { inStock: false } });
+    }
+  }
+
+  return release;
 };
 
 export const createOrderService = async (patientId, data) => {
@@ -266,11 +320,25 @@ export const createOrderService = async (patientId, data) => {
   // Calculate total server-side and resolve campaign/item/offer mapping
   let total = 0;
   const verifiedItems = [];
+  const prescriptionOnlyMedicines = [];
 
   for (const item of data.items) {
     const med = await Medicine.findById(item.medicineId);
     if (!med) throw AppError.notFound(`Medicine ${item.name || item.medicineId} not found.`);
-    const itemTotal = med.price * (item.quantity || 1);
+    const quantity = item.quantity === undefined || item.quantity === null ? 1 : Number(item.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      throw AppError.badRequest(`Invalid quantity for ${med.name}.`);
+    }
+    if (!med.inStock) {
+      throw AppError.badRequest(`${med.name} is currently out of stock.`);
+    }
+    if (typeof med.stockQuantity === "number" && quantity > med.stockQuantity) {
+      throw AppError.badRequest(`Only ${med.stockQuantity} unit(s) of ${med.name} are available.`);
+    }
+    if (med.requiresPrescription) {
+      prescriptionOnlyMedicines.push(med);
+    }
+    const itemTotal = med.price * quantity;
     total += itemTotal;
 
     const campaignId = med.campaignId !== undefined ? Number(med.campaignId) : 1;
@@ -281,7 +349,7 @@ export const createOrderService = async (patientId, data) => {
     verifiedItems.push({
       medicine: med._id,
       name: med.name,
-      quantity: item.quantity || 1,
+      quantity,
       price: med.price,
       campaignId,
       prepaidCampaignId,
@@ -292,9 +360,52 @@ export const createOrderService = async (patientId, data) => {
     });
   }
 
-  // Calculate server-side discount if coupon applied
-  let discountAmount = Number(data.discountAmount || 0);
-  let discountCode = data.discountCode || data.discount_code || data.discountLabel || data.discount_label || data.couponCode || null;
+  // Prescription-only medicines need a current prescription for this patient.
+  if (prescriptionOnlyMedicines.length > 0) {
+    const now = new Date();
+    const validPrescriptions = await Prescription.find({
+      patient: patientId,
+      $or: [{ validUntil: null }, { validUntil: { $gte: now } }],
+    }).select("medicines.name");
+
+    const missing = prescriptionOnlyMedicines.filter((med) => !isMedicinePrescribed(med, validPrescriptions));
+    if (missing.length > 0) {
+      throw AppError.badRequest(
+        `${missing.map((med) => med.name).join(", ")} require${missing.length === 1 ? "s" : ""} a valid prescription from a TeleClinic doctor.`
+      );
+    }
+  }
+
+  // Discounts are always recomputed here from the codes; amounts sent by the
+  // client are ignored so the price cannot be lowered by editing the request.
+  let discountAmount = 0;
+  let discountCode = null;
+  let coupon = null;
+  if (data.couponCode) {
+    coupon = await validateAndApplyCouponService({ code: String(data.couponCode), orderTotal: total, patientId });
+    discountAmount = coupon.discountValue;
+    discountCode = coupon.discountCode;
+  }
+
+  let giftCards;
+  if (coupon?.type === "GIFT_CARD") {
+    // A gift-card-type coupon is also forwarded to the CRM as a gift card.
+    giftCards = [{ gift_card_code: coupon.code, gift_card_apply: discountAmount }];
+  } else {
+    const giftCardCode =
+      data.gift_cards?.[0]?.gift_card_code ||
+      data.gift_cards?.[0]?.code ||
+      data.paymentDetails?.gift_cards?.[0]?.gift_card_code ||
+      null;
+    if (giftCardCode) {
+      const giftCard = await validateAndApplyGiftCardService({
+        code: String(giftCardCode),
+        orderTotal: Math.max(0, total - discountAmount),
+      });
+      giftCards = [{ gift_card_code: giftCard.code, gift_card_apply: giftCard.applyAmount }];
+    }
+  }
+
   const finalAmount = Math.max(0, Math.round((total - discountAmount) * 100) / 100);
 
   // Detect card type from payment details
@@ -307,47 +418,69 @@ export const createOrderService = async (patientId, data) => {
   const cardTypeId = data.paymentDetails?.cardTypeId || detectedCard.cardTypeId;
   const cardType = data.paymentDetails?.cardType || detectedCard.cardType;
 
+  // Reserve stock before charging so two buyers can't take the last units;
+  // it is released again if the payment does not go through.
+  const releaseStock = await reserveStock(verifiedItems);
+
   // Process order with Vrio CRM
-  const vrioResult = await processVrioOrderService({
-    patient,
-    items: verifiedItems,
-    couponCode: data.couponCode,
-    discountCode: discountCode,
-    discount_code: discountCode,
-    discountLabel: discountCode,
-    discount_label: discountCode,
-    discountAmount,
-    gift_cards: data.gift_cards || data.paymentDetails?.gift_cards || (data.couponType === "GIFT_CARD" && data.couponCode ? [{ gift_card_code: data.couponCode, gift_card_apply: discountAmount }] : undefined),
-    session_id: data.session_id || data.sessionId,
-    ip_address: data.ip_address || data.ipAddress,
-    user_agent: data.user_agent || data.userAgent,
-    order_notes: data.order_notes || data.orderNotes,
-    shippingAddress: data.shippingAddress,
-    billingDetails: data.billingDetails || {
-      fname: patient?.firstName,
-      lname: patient?.lastName,
-      email: patient?.email,
-      phone: patient?.phone,
-      address1: data.shippingAddress?.line1,
-      city: data.shippingAddress?.city,
-      state: data.shippingAddress?.state,
-      zipcode: data.shippingAddress?.pincode,
-      country: data.shippingAddress?.country || "US",
-    },
-    paymentDetails: {
-      ...data.paymentDetails,
-      cardNumber: cardNum,
-      cardTypeId,
-      cardType,
-      discountCode,
+  let vrioResult;
+  try {
+    vrioResult = await processVrioOrderService({
+      patient,
+      items: verifiedItems,
+      couponCode: data.couponCode,
+      discountCode: discountCode,
       discount_code: discountCode,
-      gift_cards: data.gift_cards || data.paymentDetails?.gift_cards,
-      session_id: data.session_id,
-      ip_address: data.ip_address,
-      user_agent: data.user_agent,
-      order_notes: data.order_notes,
-    },
-  });
+      discountLabel: discountCode,
+      discount_label: discountCode,
+      discountAmount,
+      gift_cards: giftCards,
+      session_id: data.session_id || data.sessionId,
+      ip_address: data.ip_address || data.ipAddress,
+      user_agent: data.user_agent || data.userAgent,
+      order_notes: data.order_notes || data.orderNotes,
+      shippingAddress: data.shippingAddress,
+      billingDetails: data.billingDetails || {
+        fname: patient?.firstName,
+        lname: patient?.lastName,
+        email: patient?.email,
+        phone: patient?.phone,
+        address1: data.shippingAddress?.line1,
+        city: data.shippingAddress?.city,
+        state: data.shippingAddress?.state,
+        zipcode: data.shippingAddress?.pincode,
+        country: data.shippingAddress?.country || "US",
+      },
+      paymentDetails: {
+        ...data.paymentDetails,
+        cardNumber: cardNum,
+        cardTypeId,
+        cardType,
+        discountCode,
+        discount_code: discountCode,
+        gift_cards: giftCards,
+        session_id: data.session_id,
+        ip_address: data.ip_address,
+        user_agent: data.user_agent,
+        order_notes: data.order_notes,
+      },
+    });
+  } catch (err) {
+    await releaseStock();
+    throw err;
+  }
+
+  // In test mode a declined charge comes back as { success: false } instead of
+  // throwing; never record that as a paid order (same rule as consultations).
+  if (!vrioResult?.success) {
+    await releaseStock();
+    const reason = [vrioResult?.error, vrioResult?.crmResponse?.error].find(
+      (value) => typeof value === "string" && value
+    );
+    throw AppError.badRequest(
+      reason || "Payment processing failed via CRM gateway. Please verify your card details."
+    );
+  }
 
   const order = await Order.create({
     patient: patientId,
@@ -410,14 +543,19 @@ export const createOrderService = async (patientId, data) => {
 /**
  * Synchronize any paid consultation appointments to Order records if missing
  */
-export const syncPaidAppointmentsToOrders = async () => {
+export const syncPaidAppointmentsToOrders = async (patientId = null) => {
   try {
     const Appointment = (await import("../appointments/appointment.model.js")).default;
     const { getCrmSettingsService } = await import("./vrio.service.js");
     const settings = await getCrmSettingsService();
 
+    // Scoped to one patient when called for "my orders"; unscoped for admin.
+    // Only appointments not yet linked to an order need work, so after the
+    // first sync this touches (almost) nothing on each page load.
     const paidAppointments = await Appointment.find({
       vrioOrderId: { $exists: true, $ne: null },
+      order: null,
+      ...(patientId ? { patient: patientId } : {}),
     })
       .populate("doctor", "firstName lastName specialization consultationFee")
       .populate("patient", "firstName lastName email phone address");
@@ -493,7 +631,7 @@ export const syncPaidAppointmentsToOrders = async () => {
 };
 
 export const getPatientOrdersService = async (patientId) => {
-  await syncPaidAppointmentsToOrders();
+  await syncPaidAppointmentsToOrders(patientId);
   return Order.find({ patient: patientId })
     .populate("prescription", "diagnosis")
     .populate("doctor", "firstName lastName specialization profileImage hospital")
@@ -501,9 +639,13 @@ export const getPatientOrdersService = async (patientId) => {
     .sort({ createdAt: -1 });
 };
 
-export const getAllOrdersAdminService = async () => {
+export const countOrdersAdmin = () => Order.countDocuments();
+
+export const getAllOrdersAdminService = async (paging = null) => {
   await syncPaidAppointmentsToOrders();
-  return Order.find()
+  const query = Order.find();
+  if (paging) query.skip(paging.skip).limit(paging.limit);
+  return query
     .populate("patient", "firstName lastName email phone")
     .populate("doctor", "firstName lastName specialization profileImage hospital")
     .populate("appointment", "appointmentDate slot reason roomId status")
@@ -610,17 +752,70 @@ export const deleteMedicineService = async (id) => {
   return { success: true, message: "Medicine removed from catalog." };
 };
 
-export const updateOrderStatusAdminService = async (orderId, status) => {
+const ORDER_STATUS_LABELS = {
+  PENDING: "pending",
+  PROCESSING: "being processed",
+  CONFIRMED: "confirmed",
+  SHIPPED: "shipped",
+  DELIVERED: "delivered",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+};
+
+/**
+ * Admin order update. `status` changes the fulfilment status; `paymentStatus`
+ * may only be used to mark a pending refund as done ("REFUNDED").
+ * Cancelling a paid order flags it REFUND_PENDING: refunds are issued in the
+ * CRM by staff, then recorded here.
+ */
+export const updateOrderStatusAdminService = async (orderId, status, paymentStatus) => {
   const order = await Order.findById(orderId);
   if (!order) throw AppError.notFound("Order not found.");
 
-  const validStatuses = ["PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"];
-  if (!validStatuses.includes(status)) {
-    throw AppError.badRequest(`Invalid order status. Must be one of: ${validStatuses.join(", ")}`);
+  if (paymentStatus !== undefined) {
+    if (paymentStatus !== "REFUNDED" || order.paymentStatus !== "REFUND_PENDING") {
+      throw AppError.badRequest("Only an order awaiting refund can be marked as refunded.");
+    }
+    order.paymentStatus = "REFUNDED";
   }
 
-  order.status = status;
+  const previousStatus = order.status;
+  if (status !== undefined) {
+    const validStatuses = Order.schema.path("status").enumValues;
+    if (!validStatuses.includes(status)) {
+      throw AppError.badRequest(`Invalid order status. Must be one of: ${validStatuses.join(", ")}`);
+    }
+    order.status = status;
+    if (status === "CANCELLED" && order.paymentStatus === "PAID") {
+      order.paymentStatus = "REFUND_PENDING";
+    }
+  }
+
   await order.save();
+
+  const ref = String(order._id).slice(-8).toUpperCase();
+  if (status !== undefined && status !== previousStatus) {
+    await createNotificationService({
+      recipient: order.patient,
+      recipientModel: "Patient",
+      title: status === "CANCELLED" ? "❌ Order Cancelled" : "📦 Order Update",
+      message:
+        status === "CANCELLED" && order.paymentStatus === "REFUND_PENDING"
+          ? `Your order #${ref} has been cancelled. Your refund is being processed.`
+          : `Your order #${ref} is now ${ORDER_STATUS_LABELS[status] || status.toLowerCase()}.`,
+      type: "PHARMACY",
+      link: "/patient/orders",
+    }).catch(() => {});
+  } else if (paymentStatus === "REFUNDED") {
+    await createNotificationService({
+      recipient: order.patient,
+      recipientModel: "Patient",
+      title: "💸 Refund Issued",
+      message: `The refund for your order #${ref} has been issued to your original payment method.`,
+      type: "PHARMACY",
+      link: "/patient/orders",
+    }).catch(() => {});
+  }
 
   return order.populate("patient", "firstName lastName email phone");
 };

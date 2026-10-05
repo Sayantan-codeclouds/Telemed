@@ -44,7 +44,7 @@ export const authenticateDoctor = async (
       });
     }
 
-    if (doctor.status === "INACTIVE" || doctor.status === "SUSPENDED") {
+    if (doctor.status === "INACTIVE" || doctor.status === "SUSPENDED" || doctor.status === "PENDING_APPROVAL") {
       return res.status(403).json({
         success: false,
         message: "Doctor account is deactivated or suspended by admin.",

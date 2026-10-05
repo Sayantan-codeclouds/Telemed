@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { CrmSettings } from "../../pharmacy/crmSettings.model.js";
+import { decryptSecret } from "../../shared/utils/secretBox.js";
 
 /**
  * Vrio CRM Integration Configuration
@@ -22,7 +23,7 @@ export const getVrioConfig = async (overrides = {}) => {
 
   const apiKey =
     overrides.apiKey ||
-    (adminSettings?.apiKey && adminSettings.apiKey.trim()) ||
+    (adminSettings?.apiKey && decryptSecret(adminSettings.apiKey).trim()) ||
     process.env.VRIO_API_KEY ||
     "";
 

@@ -70,6 +70,7 @@ const AdminCoupons = lazy(() => import("../pages/admin/Coupons"));
 const AdminGiftCards = lazy(() => import("../pages/admin/GiftCards"));
 const AdminUsers = lazy(() => import("../pages/admin/AdminUsers"));
 const AdminProfile = lazy(() => import("../pages/admin/Profile"));
+const AdminAuditLog = lazy(() => import("../pages/admin/AuditLog"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 
 export default function AppRoutes() {
@@ -356,6 +357,7 @@ export default function AppRoutes() {
           <Route path="crm-settings" element={<Navigate to="/admin/settings" replace />} />
           <Route path="support" element={<AdminSupportTickets />} />
           <Route path="users" element={<AdminUsers />} />
+          <Route path="audit-log" element={<AdminAuditLog />} />
           <Route path="profile" element={<AdminProfile />} />
           <Route path="*" element={<NotFound />} />
         </Route>

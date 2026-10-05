@@ -61,6 +61,7 @@ export default function AdminCoupons() {
     minOrderAmount: 0,
     maxDiscount: "",
     usageLimit: "",
+    usageLimitPerPatient: "",
     validUntil: "",
     status: "ACTIVE",
   });
@@ -96,6 +97,7 @@ export default function AdminCoupons() {
       minOrderAmount: 0,
       maxDiscount: "",
       usageLimit: "",
+    usageLimitPerPatient: "",
       validUntil: "",
       status: "ACTIVE",
     });
@@ -114,6 +116,7 @@ export default function AdminCoupons() {
       minOrderAmount: coupon.minOrderAmount ?? 0,
       maxDiscount: coupon.maxDiscount ?? "",
       usageLimit: coupon.usageLimit ?? "",
+      usageLimitPerPatient: coupon.usageLimitPerPatient ?? "",
       validUntil: coupon.validUntil
         ? new Date(coupon.validUntil).toISOString().split("T")[0]
         : "",
@@ -148,6 +151,7 @@ export default function AdminCoupons() {
         minOrderAmount: Number(formData.minOrderAmount) || 0,
         maxDiscount: formData.maxDiscount ? Number(formData.maxDiscount) : null,
         usageLimit: formData.usageLimit ? Number(formData.usageLimit) : null,
+        usageLimitPerPatient: formData.usageLimitPerPatient ? Number(formData.usageLimitPerPatient) : null,
         validUntil: formData.validUntil ? new Date(formData.validUntil) : null,
       };
 
@@ -634,6 +638,7 @@ export default function AdminCoupons() {
                     id="discountAmount"
                     type="number"
                     min="0"
+                    max={formData.type === "PERCENTAGE" ? 100 : undefined}
                     step="any"
                     placeholder="e.g. 20"
                     value={formData.discountAmount}
@@ -707,6 +712,21 @@ export default function AdminCoupons() {
                     value={formData.usageLimit}
                     onChange={(e) =>
                       setFormData({ ...formData, usageLimit: e.target.value })
+                    }
+                    className="rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="usageLimitPerPatient">Uses per Patient</Label>
+                  <Input
+                    id="usageLimitPerPatient"
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 1 (Blank for unlimited)"
+                    value={formData.usageLimitPerPatient}
+                    onChange={(e) =>
+                      setFormData({ ...formData, usageLimitPerPatient: e.target.value })
                     }
                     className="rounded-xl"
                   />

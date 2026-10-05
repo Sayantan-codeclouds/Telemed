@@ -88,6 +88,12 @@ export const triggerRecheckupReminderService = async (prescriptionId, user = nul
     throw AppError.notFound("Prescription not found.");
   }
 
+  // A doctor may only send reminders for prescriptions they wrote.
+  // (The scheduled sweep calls this without a user.)
+  if (user?.constructor?.modelName === "Doctor" && String(prescription.doctor?._id) !== String(user._id)) {
+    throw AppError.forbidden("You can only send reminders for your own prescriptions.");
+  }
+
   const doctor = prescription.doctor;
   const patient = prescription.patient;
   const doctorName = `${doctor?.firstName || "Doctor"} ${doctor?.lastName || ""}`.trim();
@@ -178,6 +184,18 @@ export const checkAndSendDueRecheckupRemindersService = async () => {
 };
 
 export const getPrescriptionByAppointmentService = async (appointmentId, userId) => {
+  const appointment = await Appointment.findById(appointmentId).select("doctor patient");
+  if (!appointment) {
+    throw AppError.notFound("Appointment not found.");
+  }
+
+  const isParticipant =
+    String(appointment.doctor) === String(userId) ||
+    String(appointment.patient) === String(userId);
+  if (!isParticipant) {
+    throw AppError.forbidden("You are not a participant of this appointment.");
+  }
+
   const prescription = await Prescription.findOne({ appointment: appointmentId })
     .populate("doctor", "firstName lastName specialization qualification licenseNumber hospital signature clinicStamp profileImage")
     .populate("patient", "firstName lastName email phone gender dateOfBirth bloodGroup");

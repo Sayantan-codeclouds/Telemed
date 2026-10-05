@@ -1,5 +1,5 @@
 import express from "express";
-import { authenticateAdmin } from "../admin/admin.middleware.js";
+import { authenticateAdmin, authorizeRoles } from "../admin/admin.middleware.js";
 import {
   getActiveSpecializations,
   getAllSpecializationsAdmin,
@@ -15,10 +15,10 @@ const router = express.Router();
 router.get("/", getActiveSpecializations);
 
 // Admin routes
-router.get("/admin", authenticateAdmin, getAllSpecializationsAdmin);
-router.post("/admin", authenticateAdmin, createSpecialization);
-router.put("/admin/:id", authenticateAdmin, updateSpecialization);
-router.delete("/admin/:id", authenticateAdmin, deleteSpecialization);
-router.patch("/admin/:id/toggle", authenticateAdmin, toggleSpecializationStatus);
+router.get("/admin", authenticateAdmin, authorizeRoles("SuperAdmin", "Admin"), getAllSpecializationsAdmin);
+router.post("/admin", authenticateAdmin, authorizeRoles("SuperAdmin", "Admin"), createSpecialization);
+router.put("/admin/:id", authenticateAdmin, authorizeRoles("SuperAdmin", "Admin"), updateSpecialization);
+router.delete("/admin/:id", authenticateAdmin, authorizeRoles("SuperAdmin", "Admin"), deleteSpecialization);
+router.patch("/admin/:id/toggle", authenticateAdmin, authorizeRoles("SuperAdmin", "Admin"), toggleSpecializationStatus);
 
 export default router;

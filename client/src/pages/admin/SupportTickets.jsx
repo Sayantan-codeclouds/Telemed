@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import adminApi from "@/api/adminApi";
+import { getCurrentAdminRole } from "@/lib/adminAccess";
 
 const STATUS_FILTERS = ["ALL", "OPEN", "IN_PROGRESS", "SOLVED", "CLOSED"];
 const SENDER_FILTERS = ["ALL", "Patient", "Doctor", "Guest"];
@@ -61,6 +62,8 @@ const PRIORITY_BADGES = {
 const DEFAULT_COUNTS = { total: 0, open: 0, inProgress: 0, solved: 0 };
 
 export default function AdminSupportTickets() {
+  // Deleting tickets is limited to SuperAdmin/Admin on the server.
+  const canDeleteTickets = getCurrentAdminRole() !== "CustomerSupport";
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [selectedSender, setSelectedSender] = useState("ALL");
@@ -358,13 +361,15 @@ export default function AdminSupportTickets() {
                       </Button>
                     )}
 
-                    <button
-                      onClick={() => handleDelete(t._id)}
-                      className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
-                      title="Delete ticket"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {canDeleteTickets && (
+                      <button
+                        onClick={() => handleDelete(t._id)}
+                        className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                        title="Delete ticket"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
 

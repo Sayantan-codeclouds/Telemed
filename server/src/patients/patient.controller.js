@@ -26,7 +26,6 @@ export const register = async (req, res) => {
         firstName: result.patient.firstName,
         lastName: result.patient.lastName,
         email: result.patient.email,
-        verificationToken: result.verificationToken,
       },
     });
   } catch (error) {
@@ -73,11 +72,10 @@ export const verifyEmail = async (req, res) => {
 
 export const forgotPasswordController = async (req, res) => {
   try {
-    const result = await forgotPassword(req.body.email);
+    await forgotPassword(req.body.email);
     return res.status(200).json({
       success: true,
-      message: "Password reset token generated.",
-      data: result,
+      message: "If an account exists for this email, a password reset link has been sent.",
     });
   } catch (error) {
     return res.status(400).json({ success: false, message: error.message });

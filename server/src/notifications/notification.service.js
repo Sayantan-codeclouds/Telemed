@@ -1,5 +1,5 @@
 import Notification from "./notification.model.js";
-import { getIO } from "../socket/socket.js";
+import { getIO, userRoom } from "../socket/socket.js";
 
 /**
  * Creates a notification record and pushes real-time event if socket is active
@@ -24,7 +24,7 @@ export const createNotificationService = async ({
   try {
     const io = getIO();
     if (io) {
-      io.emit(`notification:${recipient.toString()}`, notification);
+      io.to(userRoom(recipient.toString())).emit(`notification:${recipient.toString()}`, notification);
     }
   } catch (error) {
     // Non-critical socket notification failure

@@ -29,6 +29,12 @@ const couponSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0,
+      validate: {
+        validator: function (value) {
+          return this.type !== "PERCENTAGE" || value <= 100;
+        },
+        message: "A percentage discount cannot be more than 100%.",
+      },
     },
     // Parameter sent in JSON to Vrio CRM as discount_code
     discountCode: {
@@ -59,6 +65,11 @@ const couponSchema = new mongoose.Schema(
       type: Number,
       default: null, // null means unlimited
     },
+    usageLimitPerPatient: {
+      type: Number,
+      default: null, // null means unlimited per patient
+      min: 1,
+    },
     usedCount: {
       type: Number,
       default: 0,
@@ -84,7 +95,7 @@ const couponSchema = new mongoose.Schema(
 );
 
 // Helper method to check if coupon is currently valid
-couponSchema.methods.isValid = function (orderTotal = 0) {
+couponSchema.methods.isValid = function (orderTotal = 0, currencySign = "$") {
   if (this.status !== "ACTIVE") {
     return { valid: false, message: "This coupon is currently inactive." };
   }
@@ -94,7 +105,11 @@ couponSchema.methods.isValid = function (orderTotal = 0) {
     return { valid: false, message: "This coupon is not active yet." };
   }
 
-  if (this.validUntil && now > this.validUntil) {
+  // The admin picks an expiry *date*; the coupon stays valid for that whole
+  // (UTC) day rather than expiring at its first instant.
+  const expiresAt = this.validUntil ? new Date(this.validUntil) : null;
+  if (expiresAt) expiresAt.setUTCHours(23, 59, 59, 999);
+  if (expiresAt && now > expiresAt) {
     return { valid: false, message: "This coupon has expired." };
   }
 
@@ -105,7 +120,7 @@ couponSchema.methods.isValid = function (orderTotal = 0) {
   if (this.minOrderAmount && orderTotal < this.minOrderAmount) {
     return {
       valid: false,
-      message: `Minimum order amount of $${this.minOrderAmount} required to use this coupon.`,
+      message: `Minimum order amount of ${currencySign}${this.minOrderAmount} required to use this coupon.`,
     };
   }
 

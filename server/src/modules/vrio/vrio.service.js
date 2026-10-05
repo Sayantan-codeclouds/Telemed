@@ -4,6 +4,7 @@ import { Medicine } from "../../pharmacy/pharmacy.model.js";
 import Prescription from "../../prescriptions/prescription.model.js";
 import Patient from "../../patients/patient.model.js";
 import AppError from "../../shared/errors/AppError.js";
+import escapeRegex from "../../shared/utils/escapeRegex.js";
 
 /**
  * Auto-detect Credit Card Network & Card Type ID
@@ -36,6 +37,10 @@ export const detectCardType = (cardNumber) => {
 /**
  * Mask card number for safe logging (e.g. ***4444)
  */
+// Admin roles are "SuperAdmin" | "Admin" | "CustomerSupport"; patients and
+// doctors have no role field, so check the model the user was loaded from.
+const isAdminUser = (user) => user?.constructor?.modelName === "Admin";
+
 export const maskCardNumber = (cardNumber) => {
   if (!cardNumber) return "***";
   const sanitized = String(cardNumber).replace(/\D/g, "");
@@ -322,7 +327,7 @@ export const processVrioPayment = async (orderId, paymentData, user) => {
   }
 
   // Authorization check: only patient owner or admin can process payment
-  if (user && user._id && String(order.patient._id) !== String(user._id) && !user.role?.includes("admin")) {
+  if (user && user._id && String(order.patient._id) !== String(user._id) && !isAdminUser(user)) {
     throw AppError.forbidden("You are not authorized to process payment for this order.");
   }
 
@@ -408,7 +413,7 @@ export const getVrioOrderById = async (orderId, user) => {
     throw AppError.notFound("Vrio order not found.");
   }
 
-  if (user && user._id && String(order.patient._id) !== String(user._id) && !user.role?.includes("admin")) {
+  if (user && user._id && String(order.patient._id) !== String(user._id) && !isAdminUser(user)) {
     throw AppError.forbidden("You are not authorized to view this order.");
   }
 
@@ -421,7 +426,7 @@ export const getVrioOrderById = async (orderId, user) => {
 export const listVrioOrders = async (query = {}, user) => {
   const filter = {};
 
-  if (user && user.role !== "admin" && !user.adminId) {
+  if (user && !isAdminUser(user)) {
     filter.patient = user._id;
   } else if (query.patientId) {
     filter.patient = query.patientId;
@@ -454,8 +459,8 @@ export const createVrioOrderFromPrescription = async (prescriptionId, data, user
     // Lookup medicine in catalog to get exact configured campaign, item and offer IDs
     const matchedMedicine = await Medicine.findOne({
       $or: [
-        { name: new RegExp(`^${item.name}$`, "i") },
-        { genericName: new RegExp(`^${item.name}$`, "i") },
+        { name: new RegExp(`^${escapeRegex(item.name)}$`, "i") },
+        { genericName: new RegExp(`^${escapeRegex(item.name)}$`, "i") },
       ],
     });
 

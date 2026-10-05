@@ -1,5 +1,7 @@
 import vrioApi from "@api/vrio-api";
 import { CrmSettings } from "./crmSettings.model.js";
+import AppError from "../shared/errors/AppError.js";
+import { encryptSecret, decryptSecret } from "../shared/utils/secretBox.js";
 import { incrementCouponUsageService } from "../coupons/coupon.service.js";
 import { DEFAULT_SUPPORT_EMAIL, DEFAULT_MAIL_FROM } from "../shared/constants/defaults.js";
 
@@ -77,6 +79,11 @@ export const getCrmSettingsService = async () => {
   if (!settings) {
     settings = await CrmSettings.create(DEFAULT_SETTINGS);
   }
+  // Secrets may be stored encrypted; callers always get usable values.
+  // (This document is only read, never saved back, so nothing is re-written in clear.)
+  for (const field of CRM_SECRET_FIELDS) {
+    if (settings[field]) settings[field] = decryptSecret(settings[field]);
+  }
   // Ensure defaults if unset in older records
   if (!settings.consultationItemId) settings.consultationItemId = 3366;
   if (!settings.consultationOfferId) settings.consultationOfferId = 29;
@@ -108,16 +115,73 @@ export const getCrmSettingsService = async () => {
   return settings;
 };
 
+/** Trimmed string for a settings value; null/undefined become "" instead of crashing. */
+const toTrimmedString = (value) => (value === undefined || value === null ? "" : String(value).trim());
+
+const isHttpUrl = (value) => {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+/** Settings fields that hold credentials; never sent to the browser in full. */
+export const CRM_SECRET_FIELDS = [
+  "apiKey",
+  "stickyPassword",
+  "checkoutChampPassword",
+  "resendApiKey",
+  "mailApiKey",
+  "smtpPass",
+  "aiApiKey",
+  "groqApiKey",
+];
+
+/** Placeholder returned in place of a stored secret. Sending it back means "unchanged". */
+export const SECRET_MASK = "••••••••••••";
+
+/**
+ * Settings with unsaved form values layered on top (used by the admin "test"
+ * buttons). Masked or empty secrets keep the saved value.
+ */
+export const applySettingsOverrides = (settings, overrides) => {
+  if (!overrides || typeof overrides !== "object") return settings;
+  const merged = settings?.toObject ? settings.toObject() : { ...settings };
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined || value === null) continue;
+    if (CRM_SECRET_FIELDS.includes(key) && (value === SECRET_MASK || value === "")) continue;
+    merged[key] = value;
+  }
+  return merged;
+};
+
+/** Plain settings object safe to return to the admin UI (secrets replaced by SECRET_MASK). */
+export const maskCrmSettings = (settings) => {
+  const plain = settings?.toObject ? settings.toObject() : { ...settings };
+  for (const field of CRM_SECRET_FIELDS) {
+    if (plain[field]) plain[field] = SECRET_MASK;
+  }
+  return plain;
+};
+
 /**
  * Update CRM Settings
  */
-export const updateCrmSettingsService = async (data) => {
+export const updateCrmSettingsService = async (rawData = {}) => {
   let settings = await CrmSettings.findOne();
   if (!settings) {
     settings = new CrmSettings(DEFAULT_SETTINGS);
   }
 
-  if (data.apiKey !== undefined) settings.apiKey = data.apiKey.trim();
+  // A masked secret coming back from the form means "keep the stored value".
+  const data = { ...rawData };
+  for (const field of CRM_SECRET_FIELDS) {
+    if (data[field] === SECRET_MASK) delete data[field];
+  }
+
+  if (data.apiKey !== undefined) settings.apiKey = toTrimmedString(data.apiKey);
   if (data.campaignId !== undefined) settings.campaignId = Number(data.campaignId);
   if (data.prepaidCampaignId !== undefined) {
     settings.prepaidCampaignId = data.prepaidCampaignId ? Number(data.prepaidCampaignId) : null;
@@ -127,56 +191,56 @@ export const updateCrmSettingsService = async (data) => {
   if (data.shippingProfileId !== undefined) settings.shippingProfileId = Number(data.shippingProfileId);
   if (data.paymentMethodId !== undefined) settings.paymentMethodId = Number(data.paymentMethodId);
   if (data.cardTypeId !== undefined) settings.cardTypeId = Number(data.cardTypeId);
-  if (data.action !== undefined) settings.action = data.action;
+  if (data.action !== undefined) settings.action = toTrimmedString(data.action) || "process";
   if (data.consultationItemId !== undefined) settings.consultationItemId = Number(data.consultationItemId);
   if (data.consultationOfferId !== undefined) settings.consultationOfferId = Number(data.consultationOfferId);
   if (data.consultationCampaignId !== undefined) {
     settings.consultationCampaignId = data.consultationCampaignId ? Number(data.consultationCampaignId) : null;
   }
-  if (data.currencySign !== undefined) settings.currencySign = data.currencySign.trim() || "$";
-  if (data.supportEmail !== undefined) settings.supportEmail = data.supportEmail.trim() || DEFAULT_SUPPORT_EMAIL;
-  if (data.doctorSupportEmail !== undefined) settings.doctorSupportEmail = data.doctorSupportEmail.trim() || DEFAULT_SUPPORT_EMAIL;
+  if (data.currencySign !== undefined) settings.currencySign = toTrimmedString(data.currencySign) || "$";
+  if (data.supportEmail !== undefined) settings.supportEmail = toTrimmedString(data.supportEmail) || DEFAULT_SUPPORT_EMAIL;
+  if (data.doctorSupportEmail !== undefined) settings.doctorSupportEmail = toTrimmedString(data.doctorSupportEmail) || DEFAULT_SUPPORT_EMAIL;
   if (data.isEnabled !== undefined) settings.isEnabled = Boolean(data.isEnabled);
   if (data.isTestMode !== undefined) settings.isTestMode = Boolean(data.isTestMode);
-  if (data.resendApiKey !== undefined) settings.resendApiKey = data.resendApiKey.trim();
-  if (data.resendFromEmail !== undefined) settings.resendFromEmail = data.resendFromEmail.trim();
-  if (data.frontendUrl !== undefined) settings.frontendUrl = data.frontendUrl.trim();
-  if (data.appUrl !== undefined) settings.appUrl = data.appUrl.trim();
+  if (data.resendApiKey !== undefined) settings.resendApiKey = toTrimmedString(data.resendApiKey);
+  if (data.resendFromEmail !== undefined) settings.resendFromEmail = toTrimmedString(data.resendFromEmail);
+  if (data.frontendUrl !== undefined) settings.frontendUrl = toTrimmedString(data.frontendUrl);
+  if (data.appUrl !== undefined) settings.appUrl = toTrimmedString(data.appUrl);
 
   // Multi-provider mail settings
-  if (data.mailProvider !== undefined) settings.mailProvider = data.mailProvider.trim().toLowerCase();
-  if (data.mailApiKey !== undefined) settings.mailApiKey = data.mailApiKey.trim();
-  if (data.mailFromEmail !== undefined) settings.mailFromEmail = data.mailFromEmail.trim();
-  if (data.smtpHost !== undefined) settings.smtpHost = data.smtpHost.trim();
+  if (data.mailProvider !== undefined) settings.mailProvider = toTrimmedString(data.mailProvider).toLowerCase();
+  if (data.mailApiKey !== undefined) settings.mailApiKey = toTrimmedString(data.mailApiKey);
+  if (data.mailFromEmail !== undefined) settings.mailFromEmail = toTrimmedString(data.mailFromEmail);
+  if (data.smtpHost !== undefined) settings.smtpHost = toTrimmedString(data.smtpHost);
   if (data.smtpPort !== undefined) settings.smtpPort = Number(data.smtpPort) || 587;
-  if (data.smtpUser !== undefined) settings.smtpUser = data.smtpUser.trim();
-  if (data.smtpPass !== undefined) settings.smtpPass = data.smtpPass.trim();
+  if (data.smtpUser !== undefined) settings.smtpUser = toTrimmedString(data.smtpUser);
+  if (data.smtpPass !== undefined) settings.smtpPass = toTrimmedString(data.smtpPass);
   if (data.smtpSecure !== undefined) settings.smtpSecure = Boolean(data.smtpSecure);
 
   // Cross-sync resend credentials if resend is selected
   if (settings.mailProvider === "resend") {
-    if (data.mailApiKey !== undefined) settings.resendApiKey = data.mailApiKey.trim();
-    if (data.mailFromEmail !== undefined) settings.resendFromEmail = data.mailFromEmail.trim();
+    if (data.mailApiKey !== undefined) settings.resendApiKey = toTrimmedString(data.mailApiKey);
+    if (data.mailFromEmail !== undefined) settings.resendFromEmail = toTrimmedString(data.mailFromEmail);
   }
 
   // Multi-provider AI settings
-  if (data.aiProvider !== undefined) settings.aiProvider = data.aiProvider.trim().toLowerCase();
-  if (data.aiApiKey !== undefined) settings.aiApiKey = data.aiApiKey.trim();
-  if (data.aiModel !== undefined) settings.aiModel = data.aiModel.trim();
-  if (data.aiCustomBaseUrl !== undefined) settings.aiCustomBaseUrl = data.aiCustomBaseUrl.trim();
+  if (data.aiProvider !== undefined) settings.aiProvider = toTrimmedString(data.aiProvider).toLowerCase();
+  if (data.aiApiKey !== undefined) settings.aiApiKey = toTrimmedString(data.aiApiKey);
+  if (data.aiModel !== undefined) settings.aiModel = toTrimmedString(data.aiModel);
+  if (data.aiCustomBaseUrl !== undefined) settings.aiCustomBaseUrl = toTrimmedString(data.aiCustomBaseUrl);
 
-  if (data.groqApiKey !== undefined) settings.groqApiKey = data.groqApiKey.trim();
+  if (data.groqApiKey !== undefined) settings.groqApiKey = toTrimmedString(data.groqApiKey);
 
   // Cross-sync groq credentials if groq is selected
   if (settings.aiProvider === "groq") {
-    if (data.aiApiKey !== undefined) settings.groqApiKey = data.aiApiKey.trim();
+    if (data.aiApiKey !== undefined) settings.groqApiKey = toTrimmedString(data.aiApiKey);
   }
 
   // Multi-CRM Gateway settings
-  if (data.crmProvider !== undefined) settings.crmProvider = data.crmProvider.trim().toLowerCase();
-  if (data.stickyDomain !== undefined) settings.stickyDomain = data.stickyDomain.trim();
-  if (data.stickyUsername !== undefined) settings.stickyUsername = data.stickyUsername.trim();
-  if (data.stickyPassword !== undefined) settings.stickyPassword = data.stickyPassword.trim();
+  if (data.crmProvider !== undefined) settings.crmProvider = toTrimmedString(data.crmProvider).toLowerCase();
+  if (data.stickyDomain !== undefined) settings.stickyDomain = toTrimmedString(data.stickyDomain);
+  if (data.stickyUsername !== undefined) settings.stickyUsername = toTrimmedString(data.stickyUsername);
+  if (data.stickyPassword !== undefined) settings.stickyPassword = toTrimmedString(data.stickyPassword);
   if (data.stickyCampaignId !== undefined) settings.stickyCampaignId = Number(data.stickyCampaignId) || 1;
   if (data.stickyPrepaidCampaignId !== undefined) {
     settings.stickyPrepaidCampaignId = data.stickyPrepaidCampaignId ? Number(data.stickyPrepaidCampaignId) : null;
@@ -189,21 +253,59 @@ export const updateCrmSettingsService = async (data) => {
   if (data.stickyConsultationShippingId !== undefined) settings.stickyConsultationShippingId = Number(data.stickyConsultationShippingId) || 1;
   if (data.stickyConsultationBillingModelId !== undefined) settings.stickyConsultationBillingModelId = Number(data.stickyConsultationBillingModelId) || 2;
 
-  if (data.checkoutChampLoginId !== undefined) settings.checkoutChampLoginId = data.checkoutChampLoginId.trim();
-  if (data.checkoutChampPassword !== undefined) settings.checkoutChampPassword = data.checkoutChampPassword.trim();
+  if (data.checkoutChampLoginId !== undefined) settings.checkoutChampLoginId = toTrimmedString(data.checkoutChampLoginId);
+  if (data.checkoutChampPassword !== undefined) settings.checkoutChampPassword = toTrimmedString(data.checkoutChampPassword);
   if (data.checkoutChampCampaignId !== undefined) settings.checkoutChampCampaignId = Number(data.checkoutChampCampaignId) || 1;
   if (data.checkoutChampPrepaidCampaignId !== undefined) {
     settings.checkoutChampPrepaidCampaignId = data.checkoutChampPrepaidCampaignId ? Number(data.checkoutChampPrepaidCampaignId) : null;
   }
   if (data.checkoutChampProductId !== undefined) settings.checkoutChampProductId = Number(data.checkoutChampProductId) || 1;
   if (data.checkoutChampShippingId !== undefined) settings.checkoutChampShippingId = Number(data.checkoutChampShippingId) || 1;
-  if (data.checkoutChampCustomBaseUrl !== undefined) settings.checkoutChampCustomBaseUrl = data.checkoutChampCustomBaseUrl.trim();
+  if (data.checkoutChampCustomBaseUrl !== undefined) settings.checkoutChampCustomBaseUrl = toTrimmedString(data.checkoutChampCustomBaseUrl);
   if (data.checkoutChampConsultationCampaignId !== undefined) settings.checkoutChampConsultationCampaignId = Number(data.checkoutChampConsultationCampaignId) || 1;
   if (data.checkoutChampConsultationProductId !== undefined) settings.checkoutChampConsultationProductId = Number(data.checkoutChampConsultationProductId) || 3366;
   if (data.checkoutChampConsultationShippingId !== undefined) settings.checkoutChampConsultationShippingId = Number(data.checkoutChampConsultationShippingId) || 1;
 
+  // Reject malformed URLs / emails before they are used in links and API calls.
+  for (const field of ["frontendUrl", "appUrl", "aiCustomBaseUrl", "checkoutChampCustomBaseUrl"]) {
+    if (settings[field] && !isHttpUrl(settings[field])) {
+      throw AppError.badRequest(`${field} must be a full http(s) URL, e.g. https://example.com`);
+    }
+  }
+  for (const field of ["supportEmail", "doctorSupportEmail"]) {
+    if (settings[field] && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(settings[field])) {
+      throw AppError.badRequest(`${field} must be a valid email address.`);
+    }
+  }
+  if (settings.stickyDomain && !/^(https?:\/\/)?[a-z0-9.-]+(:\d+)?\/?$/i.test(settings.stickyDomain)) {
+    throw AppError.badRequest("stickyDomain must be a host name such as yourstore.sticky.io");
+  }
+
+  // Store credentials encrypted (also migrates any legacy plain-text values).
+  for (const field of CRM_SECRET_FIELDS) {
+    if (settings[field]) settings[field] = encryptSecret(settings[field]);
+  }
+
   await settings.save();
   return settings;
+};
+
+const CARD_NUMBER_FIELDS = ["card_number", "credit_card_number", "cardNumber"];
+const CARD_SECRET_FIELDS = ["card_cvv", "cvv", "cardSecurityCode"];
+
+/**
+ * Copy of a CRM payload that is safe to log or store: card numbers are
+ * reduced to their last four digits and security codes are removed.
+ */
+const redactPaymentPayload = (payload) => {
+  const safe = { ...payload };
+  for (const field of CARD_NUMBER_FIELDS) {
+    if (safe[field]) safe[field] = `***${String(safe[field]).slice(-4)}`;
+  }
+  for (const field of CARD_SECRET_FIELDS) {
+    if (safe[field]) safe[field] = "***";
+  }
+  return safe;
 };
 
 /**
@@ -480,7 +582,7 @@ export const processVrioOrderInternalService = async (orderData = {}, existingSe
     }
 
     console.log(`[Vrio CRM API] POST ${endpoint}`);
-    console.log("[Vrio CRM API] Payload:", JSON.stringify(payload, null, 2));
+    console.log("[Vrio CRM API] Payload:", JSON.stringify(redactPaymentPayload(payload), null, 2));
 
     const res = await fetch(endpoint, {
       method: "POST",
@@ -600,7 +702,7 @@ export const processVrioOrderInternalService = async (orderData = {}, existingSe
         vrioOrderId: fallbackOrderId,
         vrioResponse: {
           error: errorDetails,
-          payloadSent: { ...initialPayload, card_number: `***${cardNum.slice(-4)}` },
+          payloadSent: redactPaymentPayload(initialPayload),
           fallbackOrderId,
         },
         campaignIdUsed: Number(primaryCampaignId),
@@ -769,7 +871,7 @@ export const processStickyOrderService = async (orderData = {}, existingSettings
 
   const sendStickyRequest = async (payload) => {
     console.log(`[sticky.io CRM API] POST ${endpoint}`);
-    console.log("[sticky.io CRM API] Payload:", JSON.stringify({ ...payload, credit_card_number: `***${cardNum.slice(-4)}` }, null, 2));
+    console.log("[sticky.io CRM API] Payload:", JSON.stringify(redactPaymentPayload(payload), null, 2));
 
     const res = await fetch(endpoint, {
       method: "POST",
@@ -1018,7 +1120,7 @@ export const processCheckoutChampOrderService = async (orderData = {}, existingS
 
   const sendCCRequest = async (payload) => {
     console.log(`[CheckoutChamp CRM API] POST ${endpoint}`);
-    console.log("[CheckoutChamp CRM API] Payload:", JSON.stringify({ ...payload, cardNumber: `***${cardNum.slice(-4)}` }, null, 2));
+    console.log("[CheckoutChamp CRM API] Payload:", JSON.stringify(redactPaymentPayload(payload), null, 2));
 
     const res = await fetch(endpoint, {
       method: "POST",

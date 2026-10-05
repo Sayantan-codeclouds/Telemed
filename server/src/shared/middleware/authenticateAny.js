@@ -36,7 +36,7 @@ export const authenticateAny = async (req, res, next) => {
 
     if (decoded.adminId) {
       const admin = await Admin.findById(decoded.adminId);
-      if (admin) {
+      if (admin && admin.status === "ACTIVE" && (decoded.tv || 0) === (admin.tokenVersion || 0)) {
         req.admin = admin;
         req.user = admin;
         return next();

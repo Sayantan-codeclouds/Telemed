@@ -6,8 +6,9 @@ import {
   verificationEmailTemplate,
   recheckupReminderEmailTemplate,
   orderInvoiceEmailTemplate,
+  escapeHtml,
 } from "./mail.templates.js";
-import { getCrmSettingsService } from "../pharmacy/vrio.service.js";
+import { getCrmSettingsService, applySettingsOverrides } from "../pharmacy/vrio.service.js";
 import { DEFAULT_SUPPORT_EMAIL, DEFAULT_MAIL_FROM } from "../shared/constants/defaults.js";
 
 const PostmarkClient = postmarkPkg.ServerClient || postmarkPkg.default?.ServerClient || postmarkPkg;
@@ -16,7 +17,7 @@ const PostmarkClient = postmarkPkg.ServerClient || postmarkPkg.default?.ServerCl
  * Dynamically resolves active mail provider configuration from Admin Settings (MongoDB)
  * with graceful fallback to process.env
  */
-export async function getMailConfig() {
+export async function getMailConfig(overrides = null) {
   let provider = "resend";
   let apiKey = "";
   let mailFrom = DEFAULT_MAIL_FROM;
@@ -29,7 +30,7 @@ export async function getMailConfig() {
   };
 
   try {
-    const settings = await getCrmSettingsService();
+    const settings = applySettingsOverrides(await getCrmSettingsService(), overrides);
     if (settings) {
       if (settings.mailProvider) {
         provider = settings.mailProvider.trim().toLowerCase();
@@ -83,8 +84,8 @@ export async function getMailConfig() {
  * - Postmark
  * - Custom SMTP (Nodemailer)
  */
-export async function sendMailWithProvider({ to, subject, html, text }) {
-  const config = await getMailConfig();
+export async function sendMailWithProvider({ to, subject, html, text, configOverrides = null }) {
+  const config = await getMailConfig(configOverrides);
   const { provider, apiKey, mailFrom, smtp } = config;
 
   if (provider === "resend") {
@@ -257,6 +258,43 @@ export const sendPatientVerificationEmail = async (patient, verificationToken) =
 };
 
 /**
+ * Welcome email for an account created by an administrator, with a link to
+ * choose a password (uses the reset-password page and token).
+ *
+ * @param {{ email: string, firstName?: string, role: "patient" | "doctor", token: string, expiresInHours: number }} params
+ */
+export const sendAccountSetupEmail = async ({ email, firstName, role, token, expiresInHours }) => {
+  const frontendUrl = await getEffectiveFrontendUrl();
+  const setupLink = `${frontendUrl}/${role}/reset-password?token=${token}`;
+  const portal = role === "doctor" ? "Doctor Portal" : "Patient Portal";
+
+  return await sendMailWithProvider({
+    to: email,
+    subject: "Your TeleMed account is ready – set your password",
+    html: `
+      <div style="font-family:Arial,sans-serif;padding:30px;max-width:600px;margin:auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;">
+        <div style="background:#2563eb;padding:20px;border-radius:8px;text-align:center;color:#ffffff;">
+          <h2 style="margin:0;font-size:22px;">Welcome to TeleMed</h2>
+          <p style="margin:5px 0 0;font-size:13px;color:#dbeafe;">TeleMed ${portal}</p>
+        </div>
+        <div style="padding:24px 8px;color:#1e293b;">
+          <p>Hello${firstName ? ` <b>${escapeHtml(firstName)}</b>` : ""},</p>
+          <p>Our team has created a TeleMed account for you. Choose a password to sign in.</p>
+          <div style="margin:24px 0;text-align:center;">
+            <a href="${setupLink}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:14px;">
+              Set Your Password →
+            </a>
+          </div>
+          <p style="margin-top:20px;font-size:12px;color:#64748b;">
+            This link expires in <b>${expiresInHours} hours</b>. If it expires, use "Forgot password" on the sign-in page.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+};
+
+/**
  * Send password reset email to patient
  */
 export const sendResetPasswordEmail = async (email, token) => {
@@ -398,21 +436,21 @@ export const sendSupportTicketCreatedEmail = async ({
         </div>
 
         <div style="padding:20px 5px;color:#1e293b;">
-          <p style="font-size:15px;">Hello <b>${name || "Valued User"}</b>,</p>
+          <p style="font-size:15px;">Hello <b>${escapeHtml(name) || "Valued User"}</b>,</p>
           <p style="font-size:14px;line-height:1.6;color:#475569;">
             We have received your support request. Our clinical and technical support team is reviewing it and will get back to you promptly.
           </p>
 
           <div style="background:#f8fafc;padding:16px;border-radius:8px;border-left:4px solid #4f46e5;margin:20px 0;">
-            <p style="margin:0 0 8px;font-size:13px;color:#64748b;">Ticket Reference: <b style="color:#1e1b4b;font-size:15px;">#${ticketId}</b></p>
-            <p style="margin:0 0 8px;font-size:13px;color:#64748b;">Subject: <b style="color:#0f172a;">${subject}</b></p>
-            <p style="margin:0 0 8px;font-size:13px;color:#64748b;">Category: <span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:bold;">${category}</span></p>
-            <p style="margin:0;font-size:13px;color:#64748b;">Priority: <span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:bold;">${priority}</span></p>
+            <p style="margin:0 0 8px;font-size:13px;color:#64748b;">Ticket Reference: <b style="color:#1e1b4b;font-size:15px;">#${escapeHtml(ticketId)}</b></p>
+            <p style="margin:0 0 8px;font-size:13px;color:#64748b;">Subject: <b style="color:#0f172a;">${escapeHtml(subject)}</b></p>
+            <p style="margin:0 0 8px;font-size:13px;color:#64748b;">Category: <span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:bold;">${escapeHtml(category)}</span></p>
+            <p style="margin:0;font-size:13px;color:#64748b;">Priority: <span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:bold;">${escapeHtml(priority)}</span></p>
           </div>
 
           <div style="background:#ffffff;border:1px dashed #cbd5e1;padding:14px;border-radius:8px;">
             <p style="margin:0 0 4px;font-size:12px;color:#94a3b8;text-transform:uppercase;font-weight:bold;">Your Message:</p>
-            <p style="margin:0;font-size:13px;color:#334155;white-space:pre-line;">${message}</p>
+            <p style="margin:0;font-size:13px;color:#334155;white-space:pre-line;">${escapeHtml(message)}</p>
           </div>
 
           <p style="font-size:13px;color:#64748b;margin-top:25px;">
@@ -458,26 +496,26 @@ export const sendAdminSupportTicketAlertEmail = async ({
       <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;padding:25px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;">
         <div style="background:#0f172a;padding:20px;border-radius:8px;text-align:center;color:#ffffff;">
           <h2 style="margin:0;font-size:20px;">🚨 New Support Ticket Alert</h2>
-          <p style="margin:5px 0 0;font-size:13px;color:#94a3b8;">Ticket #${ticketId} • Priority: <b style="color:#f87171;">${priority}</b></p>
+          <p style="margin:5px 0 0;font-size:13px;color:#94a3b8;">Ticket #${escapeHtml(ticketId)} • Priority: <b style="color:#f87171;">${escapeHtml(priority)}</b></p>
         </div>
 
         <div style="padding:20px 5px;color:#1e293b;">
           <p style="font-size:14px;line-height:1.6;color:#334155;">
-            A new support inquiry has been submitted by <b>${name}</b> (${senderType}).
+            A new support inquiry has been submitted by <b>${escapeHtml(name)}</b> (${escapeHtml(senderType)}).
           </p>
 
           <div style="background:#f8fafc;padding:16px;border-radius:8px;border-left:4px solid #3b82f6;margin:16px 0;font-size:13px;line-height:1.8;">
-            <p style="margin:0;"><b>Submitter:</b> ${name} (${senderType})</p>
-            <p style="margin:0;"><b>Email:</b> <a href="mailto:${senderEmail}" style="color:#2563eb;">${senderEmail}</a></p>
-            ${senderPhone ? `<p style="margin:0;"><b>Phone:</b> ${senderPhone}</p>` : ""}
-            <p style="margin:0;"><b>Category:</b> ${category}</p>
-            <p style="margin:0;"><b>Priority:</b> <span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:4px;font-weight:bold;font-size:11px;">${priority}</span></p>
-            <p style="margin:0;"><b>Subject:</b> ${subject}</p>
+            <p style="margin:0;"><b>Submitter:</b> ${escapeHtml(name)} (${escapeHtml(senderType)})</p>
+            <p style="margin:0;"><b>Email:</b> <a href="mailto:${escapeHtml(senderEmail)}" style="color:#2563eb;">${escapeHtml(senderEmail)}</a></p>
+            ${escapeHtml(senderPhone) ? `<p style="margin:0;"><b>Phone:</b> ${escapeHtml(senderPhone)}</p>` : ""}
+            <p style="margin:0;"><b>Category:</b> ${escapeHtml(category)}</p>
+            <p style="margin:0;"><b>Priority:</b> <span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:4px;font-weight:bold;font-size:11px;">${escapeHtml(priority)}</span></p>
+            <p style="margin:0;"><b>Subject:</b> ${escapeHtml(subject)}</p>
           </div>
 
           <div style="background:#ffffff;border:1px solid #e2e8f0;padding:14px;border-radius:8px;">
             <p style="margin:0 0 6px;font-size:12px;color:#64748b;font-weight:bold;text-transform:uppercase;">Inquiry Description:</p>
-            <p style="margin:0;font-size:13px;color:#0f172a;line-height:1.5;white-space:pre-line;">${message}</p>
+            <p style="margin:0;font-size:13px;color:#0f172a;line-height:1.5;white-space:pre-line;">${escapeHtml(message)}</p>
           </div>
 
           <div style="margin-top:24px;text-align:center;">
@@ -617,12 +655,12 @@ export const sendOrderInvoiceEmail = async (order) => {
 /**
  * Test email verification tool for Admin Portal
  */
-export const sendTestEmailService = async (targetEmail) => {
+export const sendTestEmailService = async (targetEmail, configOverrides = null) => {
   if (!targetEmail || !targetEmail.includes("@")) {
     throw new Error("A valid target email address is required.");
   }
 
-  const config = await getMailConfig();
+  const config = await getMailConfig(configOverrides);
   const providerNames = {
     resend: "Resend Email API",
     sendgrid: "Twilio SendGrid API",
@@ -665,6 +703,7 @@ export const sendTestEmailService = async (targetEmail) => {
     to: targetEmail,
     subject: `✅ Test Email: ${providerDisplay} is Active on TeleMed`,
     html,
+    configOverrides,
   });
 
   return {

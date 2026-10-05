@@ -51,6 +51,30 @@ const adminSchema = new mongoose.Schema(
       enum: ["ACTIVE", "INACTIVE", "SUSPENDED"],
       default: "ACTIVE",
     },
+
+    // Embedded in each JWT; bumping it signs out every existing session
+    // (password, role or status change).
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    // Optional authenticator-app (TOTP) second factor.
+    twoFactorEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    twoFactorSecret: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    // Secret generated during setup, promoted to twoFactorSecret once confirmed.
+    twoFactorPendingSecret: {
+      type: String,
+      default: null,
+      select: false,
+    },
   },
   {
     timestamps: true,

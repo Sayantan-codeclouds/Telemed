@@ -62,7 +62,7 @@ export default function DoctorVerifyEmail() {
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900">Email Verified! 🎉</h2>
                 <p className="text-sm text-gray-600">
-                  Your Doctor account has been verified. Redirecting you to sign in...
+                  Your email is verified. Our team will now review your credentials; you can sign in once your account is approved. Redirecting...
                 </p>
                 <Link to="/doctor/login" className="inline-block pt-2">
                   <Button className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">

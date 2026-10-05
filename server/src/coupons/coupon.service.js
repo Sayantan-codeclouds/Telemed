@@ -1,6 +1,15 @@
 import Coupon from "./coupon.model.js";
 import AppError from "../shared/errors/AppError.js";
 import { getCrmSettingsService } from "../pharmacy/vrio.service.js";
+import { Order } from "../pharmacy/pharmacy.model.js";
+
+const getCurrencySign = async () => {
+  try {
+    return (await getCrmSettingsService())?.currencySign || "$";
+  } catch {
+    return "$";
+  }
+};
 
 // Auto-seed standard starter coupons if database is empty
 export const seedDefaultCouponsIfEmpty = async () => {
@@ -112,6 +121,7 @@ export const createCouponService = async (data) => {
     minOrderAmount: Number(minOrderAmount) || 0,
     maxDiscount: maxDiscount ? Number(maxDiscount) : null,
     usageLimit: usageLimit ? Number(usageLimit) : null,
+    usageLimitPerPatient: data.usageLimitPerPatient ? Number(data.usageLimitPerPatient) : null,
     validFrom: validFrom ? new Date(validFrom) : new Date(),
     validUntil: validUntil ? new Date(validUntil) : null,
     status: status || "ACTIVE",
@@ -145,9 +155,16 @@ export const updateCouponService = async (id, data) => {
   if (data.minOrderAmount !== undefined) coupon.minOrderAmount = Number(data.minOrderAmount) || 0;
   if (data.maxDiscount !== undefined) coupon.maxDiscount = data.maxDiscount ? Number(data.maxDiscount) : null;
   if (data.usageLimit !== undefined) coupon.usageLimit = data.usageLimit ? Number(data.usageLimit) : null;
+  if (data.usageLimitPerPatient !== undefined) {
+    coupon.usageLimitPerPatient = data.usageLimitPerPatient ? Number(data.usageLimitPerPatient) : null;
+  }
   if (data.validFrom !== undefined) coupon.validFrom = data.validFrom ? new Date(data.validFrom) : coupon.validFrom;
   if (data.validUntil !== undefined) coupon.validUntil = data.validUntil ? new Date(data.validUntil) : null;
   if (data.status !== undefined) coupon.status = data.status;
+
+  if (coupon.type === "PERCENTAGE" && coupon.discountAmount > 100) {
+    throw AppError.badRequest("A percentage discount cannot be more than 100%.");
+  }
 
   await coupon.save();
   return coupon;
@@ -164,7 +181,7 @@ export const deleteCouponService = async (id) => {
 /**
  * Validate and apply coupon in patient cart
  */
-export const validateAndApplyCouponService = async ({ code, orderTotal }) => {
+export const validateAndApplyCouponService = async ({ code, orderTotal, patientId = null }) => {
   if (!code || !code.trim()) {
     throw AppError.badRequest("Please enter a valid coupon code or gift card.");
   }
@@ -176,9 +193,27 @@ export const validateAndApplyCouponService = async ({ code, orderTotal }) => {
     throw AppError.notFound(`Coupon or Gift Card "${cleanCode}" was not found.`);
   }
 
-  const validity = coupon.isValid(Number(orderTotal) || 0);
+  const currencySign = await getCurrencySign();
+  const validity = coupon.isValid(Number(orderTotal) || 0, currencySign);
   if (!validity.valid) {
     throw AppError.badRequest(validity.message);
+  }
+
+  // Per-patient limit counts this patient's orders that used the code
+  // (consultation bookings create an order too). Failed payments don't count.
+  if (patientId && coupon.usageLimitPerPatient) {
+    const timesUsed = await Order.countDocuments({
+      patient: patientId,
+      couponCode: { $in: [coupon.code, code.trim()] },
+      paymentStatus: { $ne: "FAILED" },
+    });
+    if (timesUsed >= coupon.usageLimitPerPatient) {
+      throw AppError.badRequest(
+        coupon.usageLimitPerPatient === 1
+          ? `You have already used coupon ${coupon.code}.`
+          : `You have already used coupon ${coupon.code} the maximum ${coupon.usageLimitPerPatient} times.`
+      );
+    }
   }
 
   const discountValue = coupon.calculateDiscount(Number(orderTotal) || 0);
@@ -195,7 +230,7 @@ export const validateAndApplyCouponService = async ({ code, orderTotal }) => {
     discountValue,
     originalTotal: Number(orderTotal) || 0,
     finalTotal,
-    message: `🎉 Coupon ${coupon.code} applied! Saved $${discountValue.toFixed(2)}`,
+    message: `🎉 Coupon ${coupon.code} applied! Saved ${currencySign}${discountValue.toFixed(2)}`,
   };
 };
 

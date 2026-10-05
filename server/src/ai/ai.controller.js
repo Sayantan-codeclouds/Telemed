@@ -1,4 +1,8 @@
 import asyncHandler from "../shared/utils/asyncHandler.js";
+import AppError from "../shared/errors/AppError.js";
+import Appointment from "../appointments/appointment.model.js";
+import Prescription from "../prescriptions/prescription.model.js";
+import { assertAppointmentParticipant } from "../shared/middleware/authenticateDoctorOrPatient.js";
 import {
   runReceptionistIntake,
   generateConsultationSummaryService,
@@ -41,6 +45,16 @@ export const generateConsultationSummary = asyncHandler(async (req, res) => {
     });
   }
 
+  const appointment = await Appointment.findById(appointmentId).select("doctor patient");
+  if (!appointment) {
+    throw AppError.notFound("Appointment not found.");
+  }
+  try {
+    assertAppointmentParticipant(appointment, req);
+  } catch (err) {
+    throw AppError.forbidden(err.message);
+  }
+
   const result = await generateConsultationSummaryService(appointmentId);
   res.status(200).json({
     success: true,
@@ -51,6 +65,19 @@ export const generateConsultationSummary = asyncHandler(async (req, res) => {
 
 export const readPrescriptionToCart = asyncHandler(async (req, res) => {
   const { prescriptionId, prescriptionData } = req.body;
+
+  if (prescriptionId) {
+    const prescription = await Prescription.findById(prescriptionId).select("doctor patient");
+    if (!prescription) {
+      throw AppError.notFound("Prescription not found.");
+    }
+    const ownsPrescription =
+      (req.patient && String(prescription.patient) === String(req.patient._id)) ||
+      (req.doctor && String(prescription.doctor) === String(req.doctor._id));
+    if (!ownsPrescription) {
+      throw AppError.forbidden("You do not have access to this prescription.");
+    }
+  }
 
   const result = await readPrescriptionToCartService({
     prescriptionId,

@@ -104,7 +104,7 @@ export default function AdminDashboard() {
   const handleClearDemoData = async () => {
     if (
       !window.confirm(
-        "Are you sure you want to clear all demo patients, doctors, appointments, and prescriptions?"
+        "Remove the seeded demo accounts (dr.*@teleclinic.com / patient.*@teleclinic.com) and their appointments, prescriptions and orders? Real records are not affected."
       )
     ) {
       return;
@@ -123,6 +123,8 @@ export default function AdminDashboard() {
   };
 
   const admin = JSON.parse(localStorage.getItem("admin") || "{}");
+  // Demo tools are SuperAdmin-only and must be enabled on the server.
+  const showDemoTools = Boolean(stats?.demoToolsEnabled) && admin.role === "SuperAdmin";
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-12">
@@ -185,6 +187,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Showcase Database Control Center */}
+      {showDemoTools && (
       <Card className="border border-slate-200/80 shadow-xs rounded-3xl bg-white p-6 sm:p-7">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           <div className="flex items-start gap-4">
@@ -241,6 +244,7 @@ export default function AdminDashboard() {
           </div>
         </div>
       </Card>
+      )}
 
       {/* Executive Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -315,7 +319,9 @@ export default function AdminDashboard() {
               <Calendar className="w-12 h-12 text-slate-300 mx-auto" />
               <p className="text-sm font-bold text-slate-700">No consultations registered yet</p>
               <p className="text-xs text-slate-400">
-                Click "Seed Demo Data" above to generate realistic appointments and records.
+                {showDemoTools
+                  ? 'Click "Seed Demo Data" above to generate realistic appointments and records.'
+                  : "Appointments will appear here as patients book consultations."}
               </p>
             </CardContent>
           </Card>

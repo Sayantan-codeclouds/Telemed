@@ -1,6 +1,7 @@
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { LAB_REPORT_MIME_EXTENSIONS } from "./uploadTypes.js";
 
 const uploadPath = path.join(
   process.cwd(),
@@ -21,26 +22,18 @@ const storage = multer.diskStorage({
   },
 
   filename(req, file, cb) {
-    const ext = path.extname(file.originalname).toLowerCase();
+    const ext = LAB_REPORT_MIME_EXTENSIONS[file.mimetype];
     const userId = req.patient?._id || req.doctor?._id || "user";
     const sanitizedName = path
-      .basename(file.originalname, ext)
+      .basename(file.originalname, path.extname(file.originalname))
       .replace(/[^a-zA-Z0-9-_]/g, "_")
       .slice(0, 30);
     cb(null, `${userId}-${Date.now()}-${sanitizedName}${ext}`);
   },
 });
 
-const allowedMimes = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/jpg",
-  "image/webp",
-];
-
 const fileFilter = (req, file, cb) => {
-  if (allowedMimes.includes(file.mimetype) || file.mimetype.startsWith("image/")) {
+  if (LAB_REPORT_MIME_EXTENSIONS[file.mimetype]) {
     cb(null, true);
   } else {
     cb(

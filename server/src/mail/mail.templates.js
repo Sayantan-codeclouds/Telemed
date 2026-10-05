@@ -1,5 +1,15 @@
 import { DEFAULT_SUPPORT_EMAIL } from "../shared/constants/defaults.js";
 
+// User-entered values (names, diagnosis, addresses, item names) are escaped
+// before going into email HTML so they can't inject links or markup.
+export const escapeHtml = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 export const verificationEmailTemplate = (
   firstName,
   verificationLink
@@ -7,7 +17,7 @@ export const verificationEmailTemplate = (
 <div style="font-family:Arial,sans-serif;padding:30px">
   <h2>Welcome to TeleClinic</h2>
 
-  <p>Hello <b>${firstName}</b>,</p>
+  <p>Hello <b>${escapeHtml(firstName)}</b>,</p>
 
   <p>Please verify your email.</p>
 
@@ -29,7 +39,17 @@ export const verificationEmailTemplate = (
 </div>
 `;
 
-export const recheckupReminderEmailTemplate = ({
+export const recheckupReminderEmailTemplate = (params) =>
+  renderRecheckupReminderEmail({
+    ...params,
+    patientName: escapeHtml(params.patientName),
+    doctorName: escapeHtml(params.doctorName),
+    doctorSpecialization: escapeHtml(params.doctorSpecialization),
+    diagnosis: escapeHtml(params.diagnosis),
+    recheckupDate: escapeHtml(params.recheckupDate),
+  });
+
+const renderRecheckupReminderEmail = ({
   patientName,
   doctorName,
   doctorSpecialization,
@@ -113,18 +133,27 @@ export const orderInvoiceEmailTemplate = ({
       })
     : new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
-  const shipping = order.shippingAddress || {};
+  const rawShipping = order.shippingAddress || {};
+  const shipping = {
+    line1: escapeHtml(rawShipping.line1),
+    city: escapeHtml(rawShipping.city),
+    state: escapeHtml(rawShipping.state),
+    pincode: escapeHtml(rawShipping.pincode),
+    country: escapeHtml(rawShipping.country),
+  };
   const billing = order.billingDetails || {};
-  const cardLast4 = billing.cardLast4 || "4444";
-  const cardType = (billing.cardType || "Visa").toUpperCase();
+  const cardLast4 = escapeHtml(billing.cardLast4 || "4444");
+  const cardType = escapeHtml((billing.cardType || "Visa").toUpperCase());
+  const safePatientName = escapeHtml(patientName);
+  const discountLabel = escapeHtml(order.discountLabel);
 
   const itemsRowsHtml = items
     .map(
       (item, idx) => `
       <tr style="border-bottom: 1px solid #f1f5f9; ${idx % 2 === 0 ? "background-color: #ffffff;" : "background-color: #f8fafc;"}">
         <td style="padding: 14px 16px; font-size: 13px; color: #1e293b; font-weight: 600;">
-          ${item.name}
-          ${item.dosage ? `<div style="font-size: 11px; color: #64748b; font-weight: 400; margin-top: 2px;">Dosage: ${item.dosage}</div>` : ""}
+          ${escapeHtml(item.name)}
+          ${item.dosage ? `<div style="font-size: 11px; color: #64748b; font-weight: 400; margin-top: 2px;">Dosage: ${escapeHtml(item.dosage)}</div>` : ""}
         </td>
         <td style="padding: 14px 16px; font-size: 13px; color: #475569; text-align: center; font-weight: 600;">
           ${item.quantity || 1}
@@ -189,7 +218,7 @@ export const orderInvoiceEmailTemplate = ({
       <!-- Main Body -->
       <div style="padding: 32px;">
         <h2 style="font-size: 18px; font-weight: 800; color: #0f172a; margin: 0 0 16px;">
-          Thank you for your order, ${patientName}!
+          Thank you for your order, ${safePatientName}!
         </h2>
         <p style="font-size: 14px; color: #475569; line-height: 1.6; margin: 0 0 24px;">
           Your prescription medicines have been received, verified, and sent for fulfillment. Below is your official invoice and payment receipt.
@@ -202,7 +231,7 @@ export const orderInvoiceEmailTemplate = ({
               <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #6366f1; letter-spacing: 0.5px; margin-bottom: 6px;">
                 📍 Shipping Destination
               </div>
-              <div style="font-size: 13px; font-weight: 700; color: #0f172a;">${patientName}</div>
+              <div style="font-size: 13px; font-weight: 700; color: #0f172a;">${safePatientName}</div>
               <div style="font-size: 12px; color: #475569; margin-top: 3px; line-height: 1.4;">
                 ${shipping.line1 || "Standard Address"}<br/>
                 ${shipping.city || ""}${shipping.city && shipping.state ? ", " : ""}${shipping.state || ""} ${shipping.pincode || ""}<br/>
@@ -256,7 +285,7 @@ export const orderInvoiceEmailTemplate = ({
                 ? `
             <tr>
               <td style="padding: 6px 0; color: #16a34a; font-weight: 600;">
-                Discount ${order.discountLabel ? `(${order.discountLabel})` : ""}
+                Discount ${discountLabel ? `(${discountLabel})` : ""}
               </td>
               <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #16a34a;">
                 -${currencySign}${discountAmount.toFixed(2)}
@@ -304,4 +333,4 @@ export const orderInvoiceEmailTemplate = ({
   </html>
   `;
 };
-
+

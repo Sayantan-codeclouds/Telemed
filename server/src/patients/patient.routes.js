@@ -12,14 +12,18 @@ import {
 } from "./patient.controller.js";
 import { authenticatePatient } from "./patient.middleware.js";
 import upload from "../shared/multer.js";
+import rateLimit from "../shared/middleware/rateLimit.js";
 
 const router = express.Router();
 
-router.post("/register", register);
-router.post("/login", login);
-router.post("/verify-email", verifyEmail);
-router.post("/forgot-password", forgotPasswordController);
-router.post("/reset-password", resetPasswordController);
+// Brute-force / enumeration protection for the unauthenticated auth endpoints.
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+
+router.post("/register", authLimiter, register);
+router.post("/login", authLimiter, login);
+router.post("/verify-email", authLimiter, verifyEmail);
+router.post("/forgot-password", authLimiter, forgotPasswordController);
+router.post("/reset-password", authLimiter, resetPasswordController);
 
 router.get("/profile", authenticatePatient, getProfile);
 router.put("/profile", authenticatePatient, updateProfile);

@@ -242,7 +242,8 @@ const orderSchema = new mongoose.Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ["PENDING", "PAID", "FAILED"],
+      // REFUND_PENDING: a paid order was cancelled and still needs refunding in the CRM.
+      enum: ["PENDING", "PAID", "FAILED", "REFUND_PENDING", "REFUNDED"],
       default: "PAID",
     },
     stickyCrmOrderId: {

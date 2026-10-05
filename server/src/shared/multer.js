@@ -1,6 +1,7 @@
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { IMAGE_MIME_EXTENSIONS } from "./uploadTypes.js";
 
 const uploadPath = path.join(
   process.cwd(),
@@ -25,7 +26,7 @@ const storage = multer.diskStorage({
 
   filename(req, file, cb) {
 
-    const ext = path.extname(file.originalname);
+    const ext = IMAGE_MIME_EXTENSIONS[file.mimetype];
 
     // Support Patient, Doctor and future Admin
 
@@ -52,14 +53,14 @@ const storage = multer.diskStorage({
 
 const fileFilter = (req, file, cb) => {
 
-  if (file.mimetype.startsWith("image/")) {
+  if (IMAGE_MIME_EXTENSIONS[file.mimetype]) {
 
     cb(null, true);
 
   } else {
 
     cb(
-      new Error("Only image files are allowed."),
+      new Error("Only image files (JPG, PNG, WEBP, GIF, BMP, AVIF, HEIC) are allowed."),
       false
     );
 

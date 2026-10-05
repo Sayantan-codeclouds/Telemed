@@ -497,7 +497,7 @@ export default function PatientOrders() {
                           )}
 
                           <span className="text-[10px] uppercase font-mono font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200/60">
-                            {ord.paymentStatus || "PAID"}
+                            {(ord.paymentStatus || "PAID").replace("_", " ")}
                           </span>
                         </div>
 

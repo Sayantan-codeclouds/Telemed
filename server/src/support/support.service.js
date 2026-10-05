@@ -10,6 +10,7 @@ import {
 import { getCrmSettingsService } from "../pharmacy/vrio.service.js";
 import { createNotificationService } from "../notifications/notification.service.js";
 import { DEFAULT_SUPPORT_EMAIL } from "../shared/constants/defaults.js";
+import escapeRegex from "../shared/utils/escapeRegex.js";
 
 /**
  * Generate human-readable ticket ID e.g. TIC-849201
@@ -208,7 +209,7 @@ export const getAllSupportTicketsAdminService = async (query = {}) => {
   }
 
   if (query.search) {
-    const q = String(query.search).trim();
+    const q = escapeRegex(String(query.search).trim());
     filter.$or = [
       { ticketId: { $regex: q, $options: "i" } },
       { name: { $regex: q, $options: "i" } },

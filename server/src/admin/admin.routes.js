@@ -3,6 +3,7 @@ import { authenticateAdmin, authorizeRoles } from "./admin.middleware.js";
 import validate from "../shared/middleware/validate.js";
 import { adminLoginSchema } from "./admin.validation.js";
 import upload from "../shared/multer.js";
+import rateLimit from "../shared/middleware/rateLimit.js";
 
 import {
   login,
@@ -11,6 +12,9 @@ import {
   updateAdminProfile,
   uploadAdminProfilePhoto,
   changeAdminPassword,
+  startTwoFactorSetup,
+  enableTwoFactor,
+  disableTwoFactor,
   getPatients,
   createPatient,
   changePatientStatus,
@@ -35,6 +39,8 @@ import {
   resendAdminOrderInvoice,
   createAdminOrderForCustomer,
   getAdminCrmSettings,
+  getAdminCrmSettingsSummary,
+  getAuditLogs,
   updateAdminCrmSettings,
   sendAdminTestEmail,
   testAdminAiConnection,
@@ -48,7 +54,7 @@ import {
 const router = express.Router();
 
 // Auth
-router.post("/login", validate(adminLoginSchema), login);
+router.post("/login", rateLimit({ windowMs: 15 * 60 * 1000, max: 20 }), validate(adminLoginSchema), login);
 
 // Protected Admin Routes
 router.use(authenticateAdmin);
@@ -58,13 +64,16 @@ router.get("/profile", getAdminProfile);
 router.put("/profile", updateAdminProfile);
 router.put("/profile/photo", upload.single("photo"), uploadAdminProfilePhoto);
 router.patch("/profile/password", changeAdminPassword);
+router.post("/profile/2fa/setup", startTwoFactorSetup);
+router.post("/profile/2fa/enable", enableTwoFactor);
+router.post("/profile/2fa/disable", disableTwoFactor);
 
 // Dashboard
 router.get("/dashboard", dashboard);
 
 // Admin Team & RBAC Management
 router.get("/users", authorizeRoles("SuperAdmin", "Admin"), getAdminUsers);
-router.post("/users", authorizeRoles("SuperAdmin", "Admin"), createAdminUser);
+router.post("/users", authorizeRoles("SuperAdmin"), createAdminUser);
 router.patch("/users/:id/role", authorizeRoles("SuperAdmin"), updateAdminUserRole);
 router.patch("/users/:id/status", authorizeRoles("SuperAdmin"), updateAdminUserStatus);
 router.delete("/users/:id", authorizeRoles("SuperAdmin"), deleteAdminUser);
@@ -101,10 +110,13 @@ router.patch("/pharmacy/orders/:id/status", updateAdminOrderStatus);
 router.post("/pharmacy/orders/:id/resend-invoice", resendAdminOrderInvoice);
 
 // CRM & Platform Settings (SuperAdmin / Admin)
-router.get("/crm-settings", authorizeRoles("SuperAdmin", "Admin"), getAdminCrmSettings);
+// Full settings (secrets masked) are SuperAdmin-only, like the Settings page.
+router.get("/crm-settings", authorizeRoles("SuperAdmin"), getAdminCrmSettings);
+router.get("/crm-settings/summary", getAdminCrmSettingsSummary);
+router.get("/audit-logs", authorizeRoles("SuperAdmin"), getAuditLogs);
 router.put("/crm-settings", authorizeRoles("SuperAdmin"), updateAdminCrmSettings);
-router.post("/mail/test-email", authorizeRoles("SuperAdmin", "Admin"), sendAdminTestEmail);
-router.post("/ai/test-connection", authorizeRoles("SuperAdmin", "Admin"), testAdminAiConnection);
+router.post("/mail/test-email", authorizeRoles("SuperAdmin"), sendAdminTestEmail);
+router.post("/ai/test-connection", authorizeRoles("SuperAdmin"), testAdminAiConnection);
 
 // Demo Data Seeder & Cleaner (SuperAdmin only)
 router.post("/seed-demo", authorizeRoles("SuperAdmin"), seedDemoData);

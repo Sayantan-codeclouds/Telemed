@@ -17,86 +17,94 @@ import {
   ShieldCheck,
   User,
   Settings,
+  History,
 } from "lucide-react";
+import { ADMIN_PAGE_ROLES, getCurrentAdminRole } from "@/lib/adminAccess";
 
 const allNavItems = [
   {
     label: "Dashboard",
     path: "/admin/dashboard",
     icon: LayoutDashboard,
-    roles: ["SuperAdmin", "Admin", "CustomerSupport"],
+    roles: ADMIN_PAGE_ROLES["/admin/dashboard"],
   },
   {
     label: "Support Desk",
     path: "/admin/support",
     icon: LifeBuoy,
-    roles: ["SuperAdmin", "Admin", "CustomerSupport"],
+    roles: ADMIN_PAGE_ROLES["/admin/support"],
   },
   {
     label: "Pharmacy Orders",
     path: "/admin/orders",
     icon: ShoppingBag,
-    roles: ["SuperAdmin", "Admin", "CustomerSupport"],
+    roles: ADMIN_PAGE_ROLES["/admin/orders"],
   },
   {
     label: "Patients",
     path: "/admin/patients",
     icon: Users,
-    roles: ["SuperAdmin", "Admin", "CustomerSupport"],
+    roles: ADMIN_PAGE_ROLES["/admin/patients"],
   },
   {
     label: "Consultations",
     path: "/admin/appointments",
     icon: Calendar,
-    roles: ["SuperAdmin", "Admin", "CustomerSupport"],
+    roles: ADMIN_PAGE_ROLES["/admin/appointments"],
   },
   {
     label: "Doctors",
     path: "/admin/doctors",
     icon: Stethoscope,
-    roles: ["SuperAdmin", "Admin"],
+    roles: ADMIN_PAGE_ROLES["/admin/doctors"],
   },
   {
     label: "Pharmacy Stock",
     path: "/admin/pharmacy",
     icon: Pill,
-    roles: ["SuperAdmin", "Admin"],
+    roles: ADMIN_PAGE_ROLES["/admin/pharmacy"],
   },
   {
     label: "Specializations",
     path: "/admin/specializations",
     icon: Activity,
-    roles: ["SuperAdmin", "Admin"],
+    roles: ADMIN_PAGE_ROLES["/admin/specializations"],
   },
   {
     label: "Coupons",
     path: "/admin/coupons",
     icon: Tag,
-    roles: ["SuperAdmin", "Admin"],
+    roles: ADMIN_PAGE_ROLES["/admin/coupons"],
   },
   {
     label: "Gift Cards",
     path: "/admin/gift-cards",
     icon: Gift,
-    roles: ["SuperAdmin", "Admin"],
+    roles: ADMIN_PAGE_ROLES["/admin/gift-cards"],
   },
   {
     label: "Admin Team",
     path: "/admin/users",
     icon: ShieldCheck,
-    roles: ["SuperAdmin", "Admin"],
+    roles: ADMIN_PAGE_ROLES["/admin/users"],
   },
   {
     label: "Settings",
     path: "/admin/settings",
     icon: Settings,
-    roles: ["SuperAdmin"],
+    roles: ADMIN_PAGE_ROLES["/admin/settings"],
+  },
+  {
+    label: "Audit Log",
+    path: "/admin/audit-log",
+    icon: History,
+    roles: ADMIN_PAGE_ROLES["/admin/audit-log"],
   },
   {
     label: "My Profile",
     path: "/admin/profile",
     icon: User,
-    roles: ["SuperAdmin", "Admin", "CustomerSupport"],
+    roles: ADMIN_PAGE_ROLES["/admin/profile"],
   },
 ];
 
@@ -104,8 +112,7 @@ export default function AdminSidebar() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
 
-  const currentAdmin = JSON.parse(localStorage.getItem("admin") || "{}");
-  const userRole = currentAdmin.role || "SuperAdmin";
+  const userRole = getCurrentAdminRole();
 
   const visibleNavItems = allNavItems.filter((item) =>
     item.roles.includes(userRole)

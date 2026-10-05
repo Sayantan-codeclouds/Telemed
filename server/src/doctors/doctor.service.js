@@ -10,6 +10,11 @@ import {
 import { formatProfileImage } from "../shared/utils/fileUrl.js";
 
 export const verifyDoctorEmail = async (token) => {
+  // Only accept a plain string so query operators like { $ne: null } can't be injected.
+  if (typeof token !== "string" || !token) {
+    throw new Error("Invalid or expired verification token.");
+  }
+
   const doctor = await Doctor.findOne({
     verificationToken: token,
     verificationTokenExpires: {
@@ -46,6 +51,8 @@ export const registerDoctor = async (data) => {
     email: data.email.toLowerCase(),
     password: data.password,
     phone: data.phone,
+    // Self-registered doctors can't practise until an admin verifies their credentials.
+    status: "PENDING_APPROVAL",
     verificationToken,
     verificationTokenExpires: new Date(
       Date.now() + 24 * 60 * 60 * 1000
@@ -86,6 +93,10 @@ export const loginDoctor = async (data) => {
 
   if (!doctor.isEmailVerified) {
     throw new Error("Please verify your email before logging in.");
+  }
+
+  if (doctor.status === "PENDING_APPROVAL") {
+    throw new Error("Your account is awaiting verification by our team. You'll be notified once it's approved.");
   }
 
   if (doctor.status === "INACTIVE" || doctor.status === "SUSPENDED") {
@@ -253,8 +264,9 @@ export const forgotDoctorPassword = async (email) => {
     email: email.toLowerCase(),
   });
 
+  // Don't reveal whether the email is registered; the caller responds the same either way.
   if (!doctor) {
-    throw new Error("Doctor not found.");
+    return;
   }
 
   const resetToken = crypto.randomBytes(32).toString("hex");
@@ -268,6 +280,14 @@ export const forgotDoctorPassword = async (email) => {
 };
 
 export const resetDoctorPassword = async (token, password) => {
+  // Only accept a plain string so query operators like { $ne: null } can't be injected.
+  if (typeof token !== "string" || !token) {
+    throw new Error("Invalid or expired reset token.");
+  }
+  if (typeof password !== "string" || password.length < 8) {
+    throw new Error("Password must be at least 8 characters.");
+  }
+
   const doctor = await Doctor.findOne({
     resetPasswordToken: token,
     resetPasswordTokenExpires: {
@@ -285,13 +305,18 @@ export const resetDoctorPassword = async (token, password) => {
   await doctor.save();
 };
 
+// Public doctor endpoints must not expose credentials, bank/payout details,
+// or the signature and stamp images used to sign prescriptions.
+const PUBLIC_DOCTOR_EXCLUDED_FIELDS =
+  "-password -verificationToken -verificationTokenExpires -resetPasswordToken -resetPasswordTokenExpires -payoutSettings -signature -clinicStamp";
+
 export const getAllDoctors = async () => {
   const doctors = await Doctor.find({
     status: "ACTIVE",
     isEmailVerified: true,
   })
     .select(
-      "-password -verificationToken -verificationTokenExpires -resetPasswordToken -resetPasswordTokenExpires"
+      PUBLIC_DOCTOR_EXCLUDED_FIELDS
     )
     .sort({
       firstName: 1,
@@ -302,7 +327,7 @@ export const getAllDoctors = async () => {
 
 export const getDoctorById = async (doctorId) => {
   const doctor = await Doctor.findById(doctorId).select(
-    "-password -verificationToken -verificationTokenExpires -resetPasswordToken -resetPasswordTokenExpires"
+    PUBLIC_DOCTOR_EXCLUDED_FIELDS
   );
 
   if (!doctor) {
@@ -321,13 +346,23 @@ export const getDoctorAvailableSlots = async (doctorId, date) => {
 
   let dayName;
   let parsedDate;
+  let startOfDay;
+  let endOfDay;
   if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    // Bookings store "YYYY-MM-DD" as UTC midnight (new Date("YYYY-MM-DD")),
+    // so look up booked slots by the same UTC day regardless of server timezone.
     const [y, m, d] = date.split("-").map(Number);
-    parsedDate = new Date(y, m - 1, d);
-    dayName = parsedDate.toLocaleDateString("en-US", { weekday: "long" });
+    parsedDate = new Date(Date.UTC(y, m - 1, d));
+    dayName = parsedDate.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+    startOfDay = parsedDate;
+    endOfDay = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
   } else {
     parsedDate = new Date(date);
     dayName = parsedDate.toLocaleDateString("en-US", { weekday: "long" });
+    startOfDay = new Date(parsedDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    endOfDay = new Date(parsedDate);
+    endOfDay.setHours(23, 59, 59, 999);
   }
 
   const availability = (doctor.availability || []).find((item) => item.day === dayName);
@@ -335,11 +370,6 @@ export const getDoctorAvailableSlots = async (doctorId, date) => {
   if (!availability || !availability.enabled) {
     return [];
   }
-
-  const startOfDay = new Date(parsedDate);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(parsedDate);
-  endOfDay.setHours(23, 59, 59, 999);
 
   const bookedAppointments = await Appointment.find({
     doctor: doctorId,
@@ -372,7 +402,9 @@ export const changeDoctorPassword = async (doctorId, currentPassword, newPasswor
 
   if (newPassword.length < 8) throw new Error("New password must be at least 8 characters.");
 
-  doctor.password = await bcrypt.hash(newPassword, 10);
+  // The schema's pre("save") hook hashes the password; hashing here too
+  // would store a hash-of-a-hash and lock the doctor out.
+  doctor.password = newPassword;
   await doctor.save();
 
   return { message: "Password changed successfully." };

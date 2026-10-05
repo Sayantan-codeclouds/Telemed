@@ -1,5 +1,6 @@
 import Specialization from "./specialization.model.js";
 import Doctor from "../doctors/doctor.model.js";
+import escapeRegex from "../shared/utils/escapeRegex.js";
 
 const DEFAULT_SPECIALIZATIONS = [
   {
@@ -153,7 +154,7 @@ export const createSpecializationService = async (data) => {
   }
 
   const existing = await Specialization.findOne({
-    name: { $regex: new RegExp(`^${data.name.trim()}$`, "i") },
+    name: { $regex: new RegExp(`^${escapeRegex(data.name.trim())}$`, "i") },
   });
 
   if (existing) {
@@ -187,7 +188,7 @@ export const updateSpecializationService = async (id, data) => {
   if (data.name && data.name.trim() !== item.name) {
     const existing = await Specialization.findOne({
       _id: { $ne: id },
-      name: { $regex: new RegExp(`^${data.name.trim()}$`, "i") },
+      name: { $regex: new RegExp(`^${escapeRegex(data.name.trim())}$`, "i") },
     });
     if (existing) {
       throw new Error(`Another specialization named "${data.name.trim()}" already exists.`);
@@ -217,7 +218,7 @@ export const deleteSpecializationService = async (id) => {
 
   // Check if any doctors currently hold this specialization
   const doctorCount = await Doctor.countDocuments({
-    specialization: { $regex: new RegExp(`^${item.name}$`, "i") },
+    specialization: { $regex: new RegExp(`^${escapeRegex(item.name)}$`, "i") },
   });
 
   if (doctorCount > 0) {

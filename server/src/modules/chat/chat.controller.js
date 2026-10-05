@@ -1,10 +1,23 @@
 import { getMessages } from "./chat.service.js";
+import Appointment from "../../appointments/appointment.model.js";
+import { assertAppointmentParticipant } from "../../shared/middleware/authenticateDoctorOrPatient.js";
 
 export const getChatMessages = async (req, res) => {
 
   try {
 
     const { appointmentId } = req.params;
+
+    const appointment = await Appointment.findById(appointmentId).select("doctor patient");
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found.",
+      });
+    }
+
+    assertAppointmentParticipant(appointment, req);
 
     const messages = await getMessages(
       appointmentId
@@ -19,6 +32,13 @@ export const getChatMessages = async (req, res) => {
     });
 
   } catch (error) {
+
+    if (error.statusCode === 403) {
+      return res.status(403).json({
+        success: false,
+        message: error.message,
+      });
+    }
 
     console.error(error);
 

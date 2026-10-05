@@ -7,7 +7,8 @@ import Prescription from "../prescriptions/prescription.model.js";
 import Doctor from "../doctors/doctor.model.js";
 import Patient from "../patients/patient.model.js";
 import { Medicine } from "../pharmacy/pharmacy.model.js";
-import { getCrmSettingsService } from "../pharmacy/vrio.service.js";
+import { getCrmSettingsService, applySettingsOverrides } from "../pharmacy/vrio.service.js";
+import escapeRegex from "../shared/utils/escapeRegex.js";
 
 /**
  * Primary model — Groq OpenAI-compatible reasoning model.
@@ -23,14 +24,14 @@ const GROQ_FALLBACK_MODELS = [
 /**
  * Dynamically resolves active AI provider, credentials, and model from MongoDB CrmSettings
  */
-export async function getAiConfig() {
+export async function getAiConfig(overrides = null) {
   let provider = "groq";
   let apiKey = "";
   let model = "";
   let customBaseUrl = "";
 
   try {
-    const settings = await getCrmSettingsService();
+    const settings = applySettingsOverrides(await getCrmSettingsService(), overrides);
     if (settings) {
       if (settings.aiProvider) {
         provider = settings.aiProvider.trim().toLowerCase();
@@ -69,7 +70,7 @@ export async function getAiConfig() {
  * - Custom OpenAI-compatible endpoints (DeepSeek, OpenRouter, Local Ollama)
  */
 export async function callAI(messages, options = {}) {
-  const config = await getAiConfig();
+  const config = await getAiConfig(options.configOverrides);
   const { provider, apiKey, model, customBaseUrl } = config;
 
   const temperature = options.temperature ?? 0.2;
@@ -273,8 +274,8 @@ export const callGroqAPI = callAI;
 /**
  * Quick diagnostic tool to test AI provider connection from Admin Portal
  */
-export async function testAiConnectionService() {
-  const config = await getAiConfig();
+export async function testAiConnectionService(configOverrides = null) {
+  const config = await getAiConfig(configOverrides);
   if (!config.apiKey && config.provider !== "custom") {
     throw new Error(`API key is not configured for provider: "${config.provider}". Please save your key first.`);
   }
@@ -285,7 +286,7 @@ export async function testAiConnectionService() {
     { role: "user", content: "Reply with a one-sentence warm greeting confirming that TeleMed AI is online and operational." },
   ];
 
-  const reply = await callAI(testMessages, { maxTokens: 500, temperature: 0.3 });
+  const reply = await callAI(testMessages, { maxTokens: 500, temperature: 0.3, configOverrides });
   const latencyMs = Date.now() - startTime;
 
   if (!reply) {
@@ -448,7 +449,7 @@ TONE: Warm, empathetic, and professional. Be concise — do not pad responses wi
     // 3. Mentions of specific specialist titles in AI text
     if (!matchedSpec) {
       for (const s of specKeywords) {
-        const titleRegex = new RegExp(`\\b${s.name.replace(" ", "\\s+")}\\b`, "i");
+        const titleRegex = new RegExp(`\\b${escapeRegex(s.name).replace(" ", "\\s+")}\\b`, "i");
         if (titleRegex.test(groqContent)) {
           matchedSpec = s.name;
           break;

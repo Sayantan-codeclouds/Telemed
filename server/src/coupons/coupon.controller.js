@@ -1,3 +1,4 @@
+import jwt from "jsonwebtoken";
 import asyncHandler from "../shared/utils/asyncHandler.js";
 import {
   getAllCouponsService,
@@ -51,9 +52,21 @@ export const deleteCoupon = asyncHandler(async (req, res) => {
   });
 });
 
+// The apply endpoint is public, but a signed-in patient's token lets the
+// per-patient usage limit be checked up front instead of only at checkout.
+const getOptionalPatientId = (req) => {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith("Bearer ")) return null;
+  try {
+    return jwt.verify(header.split(" ")[1], process.env.JWT_SECRET).patientId || null;
+  } catch {
+    return null;
+  }
+};
+
 export const applyCoupon = asyncHandler(async (req, res) => {
   const { code, orderTotal } = req.body;
-  const result = await validateAndApplyCouponService({ code, orderTotal });
+  const result = await validateAndApplyCouponService({ code, orderTotal, patientId: getOptionalPatientId(req) });
   res.status(200).json({
     success: true,
     message: result.message,

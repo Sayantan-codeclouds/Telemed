@@ -45,9 +45,9 @@ export default function AdminPatients() {
     lastName: "",
     email: "",
     phone: "",
-    password: "Password@123",
-    gender: "Male",
-    bloodGroup: "O+",
+    password: "",
+    gender: "",
+    bloodGroup: "",
     dateOfBirth: "",
     status: "ACTIVE",
   });
@@ -77,9 +77,9 @@ export default function AdminPatients() {
       lastName: "",
       email: "",
       phone: "",
-      password: "Password@123",
-      gender: "Male",
-      bloodGroup: "O+",
+      password: "",
+      gender: "",
+      bloodGroup: "",
       dateOfBirth: "",
       status: "ACTIVE",
     });
@@ -136,7 +136,7 @@ export default function AdminPatients() {
   const handleDeletePatient = async (id, name) => {
     if (
       !window.confirm(
-        `Are you sure you want to permanently delete patient "${name}" and all associated appointments?`
+        `Delete patient "${name}"? Their login is disabled and upcoming appointments are cancelled. Medical and order records are kept.`
       )
     ) {
       return;
@@ -418,7 +418,7 @@ export default function AdminPatients() {
                         </td>
                         <td className="p-4 text-gray-600">
                           <span className="inline-flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-lg font-medium text-[11px] border border-slate-200/60">
-                            {patient.bloodGroup || "O+"} • {patient.gender || "Male"}
+                            {patient.bloodGroup || "Blood group —"} • {patient.gender || "Gender —"}
                           </span>
                         </td>
                         <td className="p-4">
@@ -587,18 +587,18 @@ export default function AdminPatients() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="password">Temporary Password</Label>
+                <Label htmlFor="password">Temporary Password (optional)</Label>
                 <Input
                   id="password"
                   type="text"
-                  placeholder="Password@123"
+                  placeholder="Leave blank to email a set-password link"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  required
+                  minLength={8}
                   className="rounded-xl font-mono text-xs"
                 />
                 <span className="text-[10px] text-slate-400 block">
-                  Defaults to Password@123. The patient can change this anytime.
+                  Leave blank and the patient receives an email to choose their own password. If you set one, use at least 8 characters.
                 </span>
               </div>
 
@@ -611,6 +611,7 @@ export default function AdminPatients() {
                     onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
                     className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-800 outline-none"
                   >
+                    <option value="">Not specified</option>
                     {GENDERS.map((g) => (
                       <option key={g} value={g}>
                         {g}
@@ -627,6 +628,7 @@ export default function AdminPatients() {
                     onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
                     className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-800 outline-none"
                   >
+                    <option value="">Unknown</option>
                     {BLOOD_GROUPS.map((bg) => (
                       <option key={bg} value={bg}>
                         {bg}

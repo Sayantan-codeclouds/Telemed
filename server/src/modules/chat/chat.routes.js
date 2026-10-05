@@ -1,9 +1,9 @@
 import express from "express";
 import { getChatMessages } from "./chat.controller.js";
+import { authenticateDoctorOrPatient } from "../../shared/middleware/authenticateDoctorOrPatient.js";
 
 const router = express.Router();
 
-// Get all chat messages for an appointment
-router.get("/:appointmentId", getChatMessages);
+router.get("/:appointmentId", authenticateDoctorOrPatient, getChatMessages);
 
 export default router;

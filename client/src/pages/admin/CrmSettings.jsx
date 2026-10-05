@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Key, Layers, CheckCircle2, Loader2, Save, RefreshCw, Zap,
@@ -350,10 +350,27 @@ export default function AdminCrmSettings() {
   // Seed the editable form once when settings arrive, adjusting state
   // during render instead of via an effect.
   const [appliedSettingsData, setAppliedSettingsData] = useState(undefined);
+  // JSON of the last loaded/saved form, to detect unsaved edits.
+  const [savedSnapshot, setSavedSnapshot] = useState(null);
   if (settingsData && settingsData !== appliedSettingsData) {
+    const seeded = transformSettings(settingsData);
     setAppliedSettingsData(settingsData);
-    setFormData(transformSettings(settingsData));
+    setFormData(seeded);
+    setSavedSnapshot(JSON.stringify(seeded));
   }
+
+  const hasUnsavedChanges = savedSnapshot !== null && JSON.stringify(formData) !== savedSnapshot;
+
+  // Warn before closing/reloading the tab with unsaved settings.
+  useEffect(() => {
+    if (!hasUnsavedChanges) return undefined;
+    const warn = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasUnsavedChanges]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -419,6 +436,7 @@ export default function AdminCrmSettings() {
         checkoutChampConsultationProductId: Number(formData.checkoutChampConsultationProductId || 3366),
         checkoutChampConsultationShippingId: Number(formData.checkoutChampConsultationShippingId || 1),
       });
+      setSavedSnapshot(JSON.stringify(formData));
       const sign = formData.currencySign?.trim() || "$";
       localStorage.setItem("telemed_currency_sign", sign);
       window.dispatchEvent(new Event("currency-updated"));
@@ -438,7 +456,8 @@ export default function AdminCrmSettings() {
     }
     try {
       setSendingTestEmail(true);
-      const res = await adminApi.post("/admin/mail/test-email", { targetEmail: testEmail.trim() });
+      // Test with what is on screen, even if it hasn't been saved yet.
+      const res = await adminApi.post("/admin/mail/test-email", { targetEmail: testEmail.trim(), settings: formData });
       toast.success(res.data?.message || "Test email dispatched successfully!");
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to send test email. Please verify provider credentials.");
@@ -451,11 +470,11 @@ export default function AdminCrmSettings() {
     try {
       setTestingAi(true);
       setAiTestResult(null);
-      const res = await adminApi.post("/admin/ai/test-connection");
+      const res = await adminApi.post("/admin/ai/test-connection", { settings: formData });
       setAiTestResult(res.data?.data);
       toast.success(res.data?.message || "AI connection test successful!");
     } catch (err) {
-      toast.error(err.response?.data?.message || "AI connection test failed. Please verify credentials and save first.");
+      toast.error(err.response?.data?.message || "AI connection test failed. Please verify the credentials.");
     } finally {
       setTestingAi(false);
     }
@@ -497,6 +516,11 @@ export default function AdminCrmSettings() {
           <p className="text-sm text-slate-500 mt-0.5">Manage integrations, mail, AI, and CRM gateway configuration.</p>
         </div>
         <div className="flex items-center gap-2">
+          {hasUnsavedChanges && (
+            <span className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1">
+              Unsaved changes
+            </span>
+          )}
           <Button variant="outline" onClick={fetchSettings} disabled={loading || saving} className="rounded-xl gap-2 font-bold h-10">
             <RefreshCw className="w-4 h-4" /> Reload
           </Button>

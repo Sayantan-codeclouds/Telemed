@@ -41,7 +41,7 @@ export const register = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Doctor registered successfully.",
+      message: "Registration received! Please verify your email; our team will then review your credentials before you can sign in.",
       data: {
         id: result.doctor._id,
         firstName: result.doctor.firstName,
@@ -223,7 +223,7 @@ export const forgotPasswordController = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Password reset email sent successfully.",
+      message: "If an account exists for this email, a password reset link has been sent.",
     });
   } catch (error) {
     return res.status(400).json({

@@ -30,12 +30,23 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
+  // Second step when the account has two-factor login enabled.
+  const [needsTotp, setNeedsTotp] = useState(false);
+  const [totpCode, setTotpCode] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const { data } = await adminApi.post("/admin/login", form);
+      const { data } = await adminApi.post(
+        "/admin/login",
+        needsTotp ? { ...form, totpCode: totpCode.trim() } : form
+      );
+      if (data.data?.twoFactorRequired) {
+        setNeedsTotp(true);
+        toast.info("Enter the 6-digit code from your authenticator app.");
+        return;
+      }
       localStorage.setItem("adminToken", data.data.token);
       localStorage.setItem("admin", JSON.stringify(data.data.admin));
       toast.success("Welcome to the Admin Dashboard!");
@@ -183,6 +194,31 @@ export default function AdminLogin() {
                     </button>
                   </div>
                 </div>
+
+                {needsTotp && (
+                  <div className="space-y-1.5">
+                    <label htmlFor="totpCode" className="block text-xs font-semibold text-white/60 uppercase tracking-wider">
+                      Authentication Code
+                    </label>
+                    <div className="relative">
+                      <ShieldCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none" />
+                      <input
+                        id="totpCode"
+                        inputMode="numeric"
+                        pattern="[0-9 ]*"
+                        maxLength={7}
+                        placeholder="123456"
+                        value={totpCode}
+                        onChange={(e) => setTotpCode(e.target.value)}
+                        className={inputCls}
+                        required
+                        autoFocus
+                        autoComplete="one-time-code"
+                      />
+                    </div>
+                    <p className="text-[11px] text-white/40">From the authenticator app you set up in your admin profile.</p>
+                  </div>
+                )}
 
                 <button
                   type="submit"

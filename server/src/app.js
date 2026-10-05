@@ -22,8 +22,13 @@ import giftCardRoutes from "./giftcards/giftcard.routes.js";
 import supportRoutes from "./support/support.routes.js";
 import labReportRoutes from "./lab-reports/labReport.routes.js";
 import payoutRoutes from "./payouts/payout.routes.js";
+import { auditAdminActions } from "./shared/middleware/adminAudit.js";
 
 const app = express();
+
+// Behind the hosting provider's proxy: trust the first hop so req.ip is the
+// real client address (used by the rate limiters).
+app.set("trust proxy", 1);
 
 /**
  * Global Middlewares
@@ -39,6 +44,9 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
+
+// Records every successful state-changing admin request (see adminAudit.js).
+app.use(auditAdminActions);
 
 /**
  * Static Files — Profile images & uploads

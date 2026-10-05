@@ -57,6 +57,12 @@ export default function AdminProfile() {
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [updatingPassword, setUpdatingPassword] = useState(false);
 
+  // Two-factor login (authenticator app)
+  const [twoFactorSetup, setTwoFactorSetup] = useState(null); // { secret, otpauthUrl }
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [twoFactorPassword, setTwoFactorPassword] = useState("");
+  const [twoFactorBusy, setTwoFactorBusy] = useState(false);
+
   // Fetch admin profile
   const {
     data: profile = null,
@@ -204,6 +210,10 @@ export default function AdminProfile() {
         newPassword: passwordForm.newPassword,
       });
 
+      // The server signed out all sessions; keep this one with the new token.
+      if (data.data?.token) {
+        localStorage.setItem("adminToken", data.data.token);
+      }
       toast.success(data.message || "Password updated successfully!");
       setPasswordForm({
         currentPassword: "",
@@ -215,6 +225,64 @@ export default function AdminProfile() {
       toast.error(err.response?.data?.message || "Failed to update password.");
     } finally {
       setUpdatingPassword(false);
+    }
+  };
+
+  // Keeps this browser signed in after the server revokes older sessions.
+  const applyFreshSession = (result) => {
+    if (result?.token) localStorage.setItem("adminToken", result.token);
+    if (result?.admin) {
+      const stored = JSON.parse(localStorage.getItem("admin") || "{}");
+      localStorage.setItem("admin", JSON.stringify({ ...stored, ...result.admin }));
+    }
+    queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+  };
+
+  const handleStartTwoFactor = async () => {
+    setTwoFactorBusy(true);
+    try {
+      const { data } = await adminApi.post("/admin/profile/2fa/setup");
+      setTwoFactorSetup(data.data);
+      setTwoFactorCode("");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Could not start two-factor setup.");
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  };
+
+  const handleEnableTwoFactor = async (e) => {
+    e.preventDefault();
+    setTwoFactorBusy(true);
+    try {
+      const { data } = await adminApi.post("/admin/profile/2fa/enable", { code: twoFactorCode.trim() });
+      applyFreshSession(data.data);
+      setTwoFactorSetup(null);
+      setTwoFactorCode("");
+      toast.success(data.message || "Two-factor login enabled.");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Could not enable two-factor login.");
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  };
+
+  const handleDisableTwoFactor = async (e) => {
+    e.preventDefault();
+    setTwoFactorBusy(true);
+    try {
+      const { data } = await adminApi.post("/admin/profile/2fa/disable", {
+        password: twoFactorPassword,
+        code: twoFactorCode.trim(),
+      });
+      applyFreshSession(data.data);
+      setTwoFactorPassword("");
+      setTwoFactorCode("");
+      toast.success(data.message || "Two-factor login disabled.");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Could not disable two-factor login.");
+    } finally {
+      setTwoFactorBusy(false);
     }
   };
 
@@ -646,6 +714,94 @@ export default function AdminProfile() {
                   </Button>
                 </div>
               </form>
+            </CardContent>
+          </Card>
+
+          {/* Card 3: Two-Factor Login */}
+          <Card className="border border-slate-200/80 shadow-xs rounded-3xl bg-white">
+            <CardHeader className="pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                <CardTitle className="text-base font-bold text-slate-900">Two-Factor Login</CardTitle>
+                {profile?.twoFactorEnabled && (
+                  <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">ON</Badge>
+                )}
+              </div>
+              <CardDescription className="text-xs text-slate-500">
+                Require a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, ...) when signing in.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-5 space-y-4">
+              {profile?.twoFactorEnabled ? (
+                <form onSubmit={handleDisableTwoFactor} className="space-y-3">
+                  <p className="text-xs text-slate-600">To turn it off, confirm your password and a current code.</p>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="tfaPassword">Current Password</Label>
+                      <Input
+                        id="tfaPassword"
+                        type="password"
+                        value={twoFactorPassword}
+                        onChange={(e) => setTwoFactorPassword(e.target.value)}
+                        required
+                        className="rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="tfaDisableCode">Authenticator Code</Label>
+                      <Input
+                        id="tfaDisableCode"
+                        inputMode="numeric"
+                        placeholder="123456"
+                        value={twoFactorCode}
+                        onChange={(e) => setTwoFactorCode(e.target.value)}
+                        required
+                        className="rounded-xl font-mono"
+                      />
+                    </div>
+                  </div>
+                  <Button type="submit" variant="outline" disabled={twoFactorBusy} className="rounded-xl text-rose-600 border-rose-200 hover:bg-rose-50">
+                    {twoFactorBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Turn Off Two-Factor Login"}
+                  </Button>
+                </form>
+              ) : twoFactorSetup ? (
+                <form onSubmit={handleEnableTwoFactor} className="space-y-3">
+                  <ol className="text-xs text-slate-600 space-y-1 list-decimal pl-4">
+                    <li>In your authenticator app, choose &quot;Add account&quot; and then &quot;Enter a setup key&quot;.</li>
+                    <li>Use your admin email as the account name and choose time-based.</li>
+                    <li>Enter the key below, then type the 6-digit code the app shows.</li>
+                  </ol>
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Setup key</p>
+                    <p className="font-mono text-sm font-bold text-slate-900 break-all select-all">
+                      {twoFactorSetup.secret.match(/.{1,4}/g).join(" ")}
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+                    <div className="space-y-1.5 flex-1">
+                      <Label htmlFor="tfaEnableCode">Code from the app</Label>
+                      <Input
+                        id="tfaEnableCode"
+                        inputMode="numeric"
+                        placeholder="123456"
+                        value={twoFactorCode}
+                        onChange={(e) => setTwoFactorCode(e.target.value)}
+                        required
+                        autoFocus
+                        className="rounded-xl font-mono"
+                      />
+                    </div>
+                    <Button type="submit" disabled={twoFactorBusy} className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white">
+                      {twoFactorBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify & Turn On"}
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <Button onClick={handleStartTwoFactor} disabled={twoFactorBusy} className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
+                  {twoFactorBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                  Set Up Two-Factor Login
+                </Button>
+              )}
             </CardContent>
           </Card>
         </div>

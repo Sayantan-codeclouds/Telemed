@@ -3,15 +3,18 @@ import {
   loginAdmin,
   getDashboardStats,
   getAllPatients,
+  countPatients,
   createPatientService,
   updatePatientStatus,
   deletePatientService,
   getAllDoctorsAdmin,
+  countDoctorsAdmin,
   createDoctorService,
   updateDoctorStatus,
   updateDoctorCommissionService,
   deleteDoctorService,
   getAllAppointments,
+  countAppointments,
   deleteAppointmentService,
   rescheduleAppointmentByAdminService,
   seedDemoDataService,
@@ -25,6 +28,9 @@ import {
   updateAdminProfileService,
   uploadAdminProfilePhotoService,
   changeAdminPasswordService,
+  startTwoFactorSetupService,
+  enableTwoFactorService,
+  disableTwoFactorService,
 } from "./admin.service.js";
 import {
   getMedicinesService,
@@ -33,6 +39,7 @@ import {
   toggleMedicineStockService,
   deleteMedicineService,
   getAllOrdersAdminService,
+  countOrdersAdmin,
   updateOrderStatusAdminService,
   resendOrderInvoiceAdminService,
   createOrderService,
@@ -40,14 +47,28 @@ import {
 import {
   getCrmSettingsService,
   updateCrmSettingsService,
+  maskCrmSettings,
 } from "../pharmacy/vrio.service.js";
 import { sendTestEmailService } from "../mail/mail.service.js";
+import { recordAdminAction } from "../shared/middleware/adminAudit.js";
+import AuditLog from "./auditLog.model.js";
 import { testAiConnectionService } from "../ai/ai.service.js";
 
 /* =================== Auth =================== */
 
 export const login = asyncHandler(async (req, res) => {
   const result = await loginAdmin(req.body);
+
+  if (result.token) {
+    await recordAdminAction({
+      admin: { _id: result.admin.id, email: result.admin.email, role: result.admin.role },
+      action: "LOGIN",
+      method: "POST",
+      path: req.originalUrl.split("?")[0],
+      statusCode: 200,
+      ip: req.ip || "",
+    });
+  }
 
   res.status(200).json({
     success: true,
@@ -69,22 +90,46 @@ export const dashboard = asyncHandler(async (req, res) => {
 
 /* =================== Patients =================== */
 
-export const getPatients = asyncHandler(async (req, res) => {
-  const patients = await getAllPatients();
+/**
+ * Optional paging for admin lists: ?page=1&limit=50 (limit max 200).
+ * Without ?page the full list is returned, as the admin pages expect today.
+ */
+const parsePaging = (query) => {
+  if (query.page === undefined) return null;
+  const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 200);
+  const page = Math.max(Number(query.page) || 1, 1);
+  return { page, limit, skip: (page - 1) * limit };
+};
 
-  res.status(200).json({
-    success: true,
-    data: patients,
-  });
+const sendList = async (res, items, paging, countFn) => {
+  const body = { success: true, data: items };
+  if (paging) {
+    const total = await countFn();
+    body.pagination = { page: paging.page, limit: paging.limit, total, pages: Math.ceil(total / paging.limit) };
+  }
+  res.status(200).json(body);
+};
+
+export const getPatients = asyncHandler(async (req, res) => {
+  const paging = parsePaging(req.query);
+  await sendList(res, await getAllPatients(paging), paging, countPatients);
 });
 
+// null = admin set the password; true/false = whether the set-password email went out.
+const setupEmailNote = (setupEmailSent) => {
+  if (setupEmailSent === true) return " A set-password link has been emailed to them.";
+  if (setupEmailSent === false) return " The set-password email could not be sent; ask them to use \"Forgot password\".";
+  return "";
+};
+
 export const createPatient = asyncHandler(async (req, res) => {
-  const patient = await createPatientService(req.body);
+  const { patient, setupEmailSent } = await createPatientService(req.body);
 
   res.status(201).json({
     success: true,
-    message: `Patient ${patient.firstName} ${patient.lastName} created successfully!`,
+    message: `Patient ${patient.firstName} ${patient.lastName} created successfully!${setupEmailNote(setupEmailSent)}`,
     data: patient,
+    setupEmailSent,
   });
 });
 
@@ -113,21 +158,18 @@ export const deletePatient = asyncHandler(async (req, res) => {
 /* =================== Doctors =================== */
 
 export const getDoctors = asyncHandler(async (req, res) => {
-  const doctors = await getAllDoctorsAdmin();
-
-  res.status(200).json({
-    success: true,
-    data: doctors,
-  });
+  const paging = parsePaging(req.query);
+  await sendList(res, await getAllDoctorsAdmin(paging), paging, countDoctorsAdmin);
 });
 
 export const createDoctor = asyncHandler(async (req, res) => {
-  const doctor = await createDoctorService(req.body);
+  const { doctor, setupEmailSent } = await createDoctorService(req.body);
 
   res.status(201).json({
     success: true,
-    message: `Dr. ${doctor.firstName} ${doctor.lastName} created successfully!`,
+    message: `Dr. ${doctor.firstName} ${doctor.lastName} created successfully!${setupEmailNote(setupEmailSent)}`,
     data: doctor,
+    setupEmailSent,
   });
 });
 
@@ -169,12 +211,8 @@ export const deleteDoctor = asyncHandler(async (req, res) => {
 /* =================== Appointments =================== */
 
 export const getAppointments = asyncHandler(async (req, res) => {
-  const appointments = await getAllAppointments();
-
-  res.status(200).json({
-    success: true,
-    data: appointments,
-  });
+  const paging = parsePaging(req.query);
+  await sendList(res, await getAllAppointments(paging), paging, countAppointments);
 });
 
 export const deleteAppointment = asyncHandler(async (req, res) => {
@@ -283,23 +321,23 @@ export const deleteAdminMedicine = asyncHandler(async (req, res) => {
 /* =================== Pharmacy Orders Controls =================== */
 
 export const getAdminOrders = asyncHandler(async (req, res) => {
-  const orders = await getAllOrdersAdminService();
-
-  res.status(200).json({
-    success: true,
-    data: orders,
-  });
+  const paging = parsePaging(req.query);
+  await sendList(res, await getAllOrdersAdminService(paging), paging, countOrdersAdmin);
 });
 
 export const updateAdminOrderStatus = asyncHandler(async (req, res) => {
   const order = await updateOrderStatusAdminService(
     req.params.id,
-    req.body.status
+    req.body.status,
+    req.body.paymentStatus
   );
 
   res.status(200).json({
     success: true,
-    message: `Order status updated to ${order.status}.`,
+    message:
+      order.paymentStatus === "REFUND_PENDING"
+        ? `Order status updated to ${order.status}. Issue the refund in the CRM, then mark it refunded.`
+        : `Order status updated to ${order.status}.`,
     data: order,
   });
 });
@@ -352,7 +390,22 @@ export const getAdminCrmSettings = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    data: settings,
+    data: maskCrmSettings(settings),
+  });
+});
+
+// Non-secret settings any admin role may read (e.g. which CRM is active).
+export const getAdminCrmSettingsSummary = asyncHandler(async (req, res) => {
+  const settings = await getCrmSettingsService();
+
+  res.status(200).json({
+    success: true,
+    data: {
+      crmProvider: settings.crmProvider || "vrio",
+      currencySign: settings.currencySign || "$",
+      isEnabled: Boolean(settings.isEnabled),
+      isTestMode: Boolean(settings.isTestMode),
+    },
   });
 });
 
@@ -362,9 +415,26 @@ export const updateAdminCrmSettings = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: "Settings updated successfully.",
-    data: settings,
+    data: maskCrmSettings(settings),
   });
 });
+
+// The Settings page sends its current (possibly unsaved) values so the test
+// buttons check what is on screen. Only the relevant keys are accepted.
+const pickOverrides = (source, keys) => {
+  if (!source || typeof source !== "object") return null;
+  const picked = {};
+  for (const key of keys) {
+    if (source[key] !== undefined) picked[key] = source[key];
+  }
+  return picked;
+};
+
+const MAIL_OVERRIDE_KEYS = [
+  "mailProvider", "mailApiKey", "mailFromEmail", "resendApiKey", "resendFromEmail",
+  "smtpHost", "smtpPort", "smtpUser", "smtpPass", "smtpSecure",
+];
+const AI_OVERRIDE_KEYS = ["aiProvider", "aiApiKey", "aiModel", "aiCustomBaseUrl", "groqApiKey"];
 
 export const sendAdminTestEmail = asyncHandler(async (req, res) => {
   const { targetEmail } = req.body;
@@ -375,7 +445,10 @@ export const sendAdminTestEmail = asyncHandler(async (req, res) => {
     });
   }
 
-  const result = await sendTestEmailService(targetEmail.trim());
+  const result = await sendTestEmailService(
+    targetEmail.trim(),
+    pickOverrides(req.body.settings, MAIL_OVERRIDE_KEYS)
+  );
   res.status(200).json({
     success: true,
     message: `Test email dispatched successfully via ${result.providerDisplay || result.provider}!`,
@@ -384,11 +457,33 @@ export const sendAdminTestEmail = asyncHandler(async (req, res) => {
 });
 
 export const testAdminAiConnection = asyncHandler(async (req, res) => {
-  const result = await testAiConnectionService();
+  const result = await testAiConnectionService(pickOverrides(req.body?.settings, AI_OVERRIDE_KEYS));
   res.status(200).json({
     success: true,
     message: `Connected to ${result.providerName || result.provider}! Response received in ${result.latencyMs}ms.`,
     data: result,
+  });
+});
+
+/* =================== Audit Log =================== */
+
+export const getAuditLogs = asyncHandler(async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+  const page = Math.max(Number(req.query.page) || 1, 1);
+
+  const [logs, total] = await Promise.all([
+    AuditLog.find()
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    AuditLog.countDocuments(),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    data: logs,
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
   });
 });
 
@@ -468,6 +563,33 @@ export const changeAdminPassword = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: result.message,
+    // Existing tokens were revoked; the client swaps in this one.
+    data: { token: result.token },
+  });
+});
+
+/* =================== Two-Factor Login =================== */
+
+export const startTwoFactorSetup = asyncHandler(async (req, res) => {
+  const result = await startTwoFactorSetupService(req.admin._id);
+  res.status(200).json({ success: true, data: result });
+});
+
+export const enableTwoFactor = asyncHandler(async (req, res) => {
+  const result = await enableTwoFactorService(req.admin._id, req.body?.code);
+  res.status(200).json({
+    success: true,
+    message: "Two-factor login enabled. Other sessions have been signed out.",
+    data: result,
+  });
+});
+
+export const disableTwoFactor = asyncHandler(async (req, res) => {
+  const result = await disableTwoFactorService(req.admin._id, req.body || {});
+  res.status(200).json({
+    success: true,
+    message: "Two-factor login disabled.",
+    data: result,
   });
 });
 

@@ -326,13 +326,36 @@ export default function AdminOrders() {
     }
 
     try {
-      await adminApi.patch(`/admin/pharmacy/orders/${orderId}/status`, {
+      const res = await adminApi.patch(`/admin/pharmacy/orders/${orderId}/status`, {
         status: newStatus,
       });
-      toast.success(`Order status updated to ${newStatus}`);
+      // Cancelling a paid order changes its payment status (refund pending).
+      const paymentStatus = res.data?.data?.paymentStatus;
+      if (paymentStatus) {
+        setOrders((prev) => prev.map((o) => (o._id === orderId ? { ...o, paymentStatus } : o)));
+      }
+      toast.success(res.data?.message || `Order status updated to ${newStatus}`);
     } catch (error) {
       fetchOrders();
       toast.error(error.response?.data?.message || "Failed to update order status.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleMarkRefunded = async (orderId) => {
+    if (!window.confirm("Confirm the refund has been issued in the CRM? The patient will be notified.")) {
+      return;
+    }
+    setUpdatingId(orderId);
+    try {
+      const res = await adminApi.patch(`/admin/pharmacy/orders/${orderId}/status`, {
+        paymentStatus: "REFUNDED",
+      });
+      setOrders((prev) => prev.map((o) => (o._id === orderId ? { ...o, paymentStatus: "REFUNDED" } : o)));
+      toast.success(res.data?.message || "Order marked as refunded.");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to mark order as refunded.");
     } finally {
       setUpdatingId(null);
     }
@@ -655,6 +678,26 @@ export default function AdminOrders() {
                           </select>
                           {isUpdating && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
                         </div>
+                        {order.paymentStatus === "REFUND_PENDING" && (
+                          <div className="mt-1.5 flex items-center justify-center gap-1.5">
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5">
+                              Refund pending
+                            </span>
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() => handleMarkRefunded(order._id)}
+                              className="text-[10px] font-bold text-indigo-600 hover:underline disabled:opacity-50"
+                            >
+                              Mark refunded
+                            </button>
+                          </div>
+                        )}
+                        {order.paymentStatus === "REFUNDED" && (
+                          <span className="mt-1.5 inline-block text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-md px-1.5 py-0.5">
+                            Refunded
+                          </span>
+                        )}
                       </td>
 
                       <td className="p-4 text-right">
