@@ -639,13 +639,9 @@ export const getPatientOrdersService = async (patientId) => {
     .sort({ createdAt: -1 });
 };
 
-export const countOrdersAdmin = () => Order.countDocuments();
-
-export const getAllOrdersAdminService = async (paging = null) => {
+export const getAllOrdersAdminService = async () => {
   await syncPaidAppointmentsToOrders();
-  const query = Order.find();
-  if (paging) query.skip(paging.skip).limit(paging.limit);
-  return query
+  return Order.find()
     .populate("patient", "firstName lastName email phone")
     .populate("doctor", "firstName lastName specialization profileImage hospital")
     .populate("appointment", "appointmentDate slot reason roomId status")

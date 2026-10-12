@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ShoppingBag,
   Search,
@@ -29,6 +28,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import adminApi from "@/api/adminApi";
+import { useAdminList, useDebouncedValue } from "@/hooks/useAdminList";
+import ListPagination from "@/components/admin/ListPagination";
+
+const PAGE_SIZE = 25;
 
 const STATUS_FILTERS = ["ALL", "PROCESSING", "CONFIRMED", "SHIPPED", "DELIVERED", "COMPLETED", "CANCELLED"];
 
@@ -77,7 +80,6 @@ const statusConfig = {
 };
 
 export default function AdminOrders() {
-  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [selectedType, setSelectedType] = useState("ALL");
@@ -85,26 +87,32 @@ export default function AdminOrders() {
   const [resendingId, setResendingId] = useState(null);
   const [viewOrder, setViewOrder] = useState(null);
 
-  const ORDERS_QUERY_KEY = ["admin-pharmacy-orders"];
+  // Server-side paging, search and filters.
+  const [page, setPage] = useState(1);
+  const debouncedSearch = useDebouncedValue(search);
+  const filterKey = JSON.stringify([debouncedSearch, selectedStatus, selectedType]);
+  const [appliedFilterKey, setAppliedFilterKey] = useState(filterKey);
+  if (filterKey !== appliedFilterKey) {
+    setAppliedFilterKey(filterKey);
+    setPage(1);
+  }
 
   const {
-    data: orders = [],
+    items: orders,
+    pagination,
+    counts: serverCounts,
     isLoading: loading,
-    refetch: fetchOrders,
-  } = useQuery({
-    queryKey: ORDERS_QUERY_KEY,
-    queryFn: async () => {
-      const { data } = await adminApi.get("/admin/pharmacy/orders");
-      return data.data || [];
-    },
-    meta: { errorMessage: "Failed to load orders." },
+    isFetching,
+    setItems: setOrders,
+    // Refetches the list and its counts (after creating/updating orders).
+    invalidate: fetchOrders,
+  } = useAdminList("admin-pharmacy-orders", "/admin/pharmacy/orders", {
+    page,
+    limit: PAGE_SIZE,
+    search: debouncedSearch,
+    status: selectedStatus,
+    type: selectedType,
   });
-
-  const setOrders = (updater) => {
-    queryClient.setQueryData(ORDERS_QUERY_KEY, (prev) =>
-      typeof updater === "function" ? updater(prev || []) : updater
-    );
-  };
 
   const handleResendInvoice = async (order) => {
     if (!order?._id) return;
@@ -361,46 +369,22 @@ export default function AdminOrders() {
     }
   };
 
-  const filteredOrders = orders.filter((order) => {
-    const term = search.toLowerCase();
-    const crmId = order.vrioOrderId || order.stickyCrmOrderId || "";
-    const matchesSearch =
-      order._id?.toLowerCase().includes(term) ||
-      crmId.toLowerCase().includes(term) ||
-      `${order.patient?.firstName} ${order.patient?.lastName}`
-        .toLowerCase()
-        .includes(term) ||
-      order.patient?.email?.toLowerCase().includes(term) ||
-      order.patient?.phone?.includes(term);
+  // Rows arrive already searched and filtered by the server.
+  const filteredOrders = orders;
 
-    const matchesStatus =
-      selectedStatus === "ALL" || order.status === selectedStatus;
-
-    // Orders predating the consultation flow have no orderType, so treat a
-    // missing value as PHARMACY (same convention as the patient Orders view).
-    const matchesType =
-      selectedType === "ALL" || (order.orderType || "PHARMACY") === selectedType;
-
-    return matchesSearch && matchesStatus && matchesType;
-  });
-
+  // Platform-wide totals from the server (independent of the current page/filters).
+  const byStatus = serverCounts.byStatus || {};
   const counts = {
-    all: orders.length,
-    processing: orders.filter((o) => o.status === "PROCESSING").length,
-    shipped: orders.filter((o) => o.status === "SHIPPED").length,
-    delivered: orders.filter((o) => o.status === "DELIVERED").length,
-    cancelled: orders.filter((o) => o.status === "CANCELLED").length,
+    all: serverCounts.all ?? 0,
+    processing: byStatus.PROCESSING ?? 0,
+    shipped: byStatus.SHIPPED ?? 0,
+    delivered: byStatus.DELIVERED ?? 0,
+    cancelled: byStatus.CANCELLED ?? 0,
   };
 
-  const typeCounts = {
-    ALL: orders.length,
-    CONSULTATION: orders.filter((o) => o.orderType === "CONSULTATION").length,
-    PHARMACY: orders.filter((o) => (o.orderType || "PHARMACY") === "PHARMACY").length,
-  };
+  const typeCounts = serverCounts.byType || { ALL: 0, CONSULTATION: 0, PHARMACY: 0 };
 
-  const totalRevenue = orders
-    .filter((o) => o.status !== "CANCELLED")
-    .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+  const totalRevenue = serverCounts.revenue ?? 0;
 
   if (loading) {
     return (
@@ -743,6 +727,16 @@ export default function AdminOrders() {
           </div>
         </CardContent>
       </Card>
+
+      <ListPagination
+        page={pagination.page}
+        pages={pagination.pages}
+        total={pagination.total}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+        loading={isFetching}
+        noun="orders"
+      />
 
       {/* Order Details Drawer Modal */}
       {viewOrder && (

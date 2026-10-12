@@ -228,19 +228,11 @@ export const getDashboardStats = async () => {
 
 /* =================== Patient Management =================== */
 
-/** Applies optional { skip, limit } paging to a query. */
-const paginate = (query, paging) => (paging ? query.skip(paging.skip).limit(paging.limit) : query);
-
-export const getAllPatients = async (paging = null) => {
-  return paginate(
-    Patient.find({ deletedAt: null })
-      .select("-password -verificationToken -verificationTokenExpires -resetPasswordToken -resetPasswordTokenExpires")
-      .sort({ createdAt: -1 }),
-    paging
-  );
+export const getAllPatients = async () => {
+  return Patient.find({ deletedAt: null })
+    .select("-password -verificationToken -verificationTokenExpires -resetPasswordToken -resetPasswordTokenExpires")
+    .sort({ createdAt: -1 });
 };
-
-export const countPatients = () => Patient.countDocuments({ deletedAt: null });
 
 export const createPatientService = async (data) => {
   const { firstName, lastName, email, phone, password, gender, bloodGroup, dateOfBirth, status } = data;
@@ -386,16 +378,11 @@ const cancelUpcomingAppointments = async (filter, notify) => {
 
 /* =================== Doctor Management =================== */
 
-export const getAllDoctorsAdmin = async (paging = null) => {
-  return paginate(
-    Doctor.find({ deletedAt: null })
-      .select("-password -verificationToken -verificationTokenExpires -resetPasswordToken -resetPasswordTokenExpires")
-      .sort({ createdAt: -1 }),
-    paging
-  );
+export const getAllDoctorsAdmin = async () => {
+  return Doctor.find({ deletedAt: null })
+    .select("-password -verificationToken -verificationTokenExpires -resetPasswordToken -resetPasswordTokenExpires -payoutSettings")
+    .sort({ createdAt: -1 });
 };
-
-export const countDoctorsAdmin = () => Doctor.countDocuments({ deletedAt: null });
 
 export const createDoctorService = async (data) => {
   const {
@@ -577,10 +564,8 @@ export const deleteDoctorService = async (doctorId) => {
 
 /* =================== Appointment Oversight =================== */
 
-export const countAppointments = () => Appointment.countDocuments();
-
-export const getAllAppointments = async (paging = null) => {
-  const appointments = await paginate(Appointment.find(), paging)
+export const getAllAppointments = async () => {
+  const appointments = await Appointment.find()
     .populate("patient", "firstName lastName email profileImage phone")
     .populate("doctor", "firstName lastName email specialization profileImage hospital")
     .sort({ createdAt: -1 });

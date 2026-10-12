@@ -3,18 +3,15 @@ import {
   loginAdmin,
   getDashboardStats,
   getAllPatients,
-  countPatients,
   createPatientService,
   updatePatientStatus,
   deletePatientService,
   getAllDoctorsAdmin,
-  countDoctorsAdmin,
   createDoctorService,
   updateDoctorStatus,
   updateDoctorCommissionService,
   deleteDoctorService,
   getAllAppointments,
-  countAppointments,
   deleteAppointmentService,
   rescheduleAppointmentByAdminService,
   seedDemoDataService,
@@ -39,7 +36,6 @@ import {
   toggleMedicineStockService,
   deleteMedicineService,
   getAllOrdersAdminService,
-  countOrdersAdmin,
   updateOrderStatusAdminService,
   resendOrderInvoiceAdminService,
   createOrderService,
@@ -52,6 +48,13 @@ import {
 import { sendTestEmailService } from "../mail/mail.service.js";
 import { recordAdminAction } from "../shared/middleware/adminAudit.js";
 import AuditLog from "./auditLog.model.js";
+import { parseListQuery } from "./adminList.js";
+import {
+  listPatientsAdmin,
+  listDoctorsAdmin,
+  listAppointmentsAdmin,
+  listOrdersAdmin,
+} from "./adminList.service.js";
 import { testAiConnectionService } from "../ai/ai.service.js";
 
 /* =================== Auth =================== */
@@ -90,29 +93,16 @@ export const dashboard = asyncHandler(async (req, res) => {
 
 /* =================== Patients =================== */
 
-/**
- * Optional paging for admin lists: ?page=1&limit=50 (limit max 200).
- * Without ?page the full list is returned, as the admin pages expect today.
- */
-const parsePaging = (query) => {
-  if (query.page === undefined) return null;
-  const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 200);
-  const page = Math.max(Number(query.page) || 1, 1);
-  return { page, limit, skip: (page - 1) * limit };
-};
-
-const sendList = async (res, items, paging, countFn) => {
-  const body = { success: true, data: items };
-  if (paging) {
-    const total = await countFn();
-    body.pagination = { page: paging.page, limit: paging.limit, total, pages: Math.ceil(total / paging.limit) };
-  }
-  res.status(200).json(body);
-};
-
+// With ?page the admin pages get one page plus counts (server-side search,
+// filters and sort); without it the full list is returned (e.g. pickers).
 export const getPatients = asyncHandler(async (req, res) => {
-  const paging = parsePaging(req.query);
-  await sendList(res, await getAllPatients(paging), paging, countPatients);
+  const paging = parseListQuery(req.query);
+  if (paging) {
+    return res.status(200).json(
+      await listPatientsAdmin(paging, { status: req.query.status, gender: req.query.gender, sort: req.query.sort })
+    );
+  }
+  res.status(200).json({ success: true, data: await getAllPatients() });
 });
 
 // null = admin set the password; true/false = whether the set-password email went out.
@@ -158,8 +148,17 @@ export const deletePatient = asyncHandler(async (req, res) => {
 /* =================== Doctors =================== */
 
 export const getDoctors = asyncHandler(async (req, res) => {
-  const paging = parsePaging(req.query);
-  await sendList(res, await getAllDoctorsAdmin(paging), paging, countDoctorsAdmin);
+  const paging = parseListQuery(req.query);
+  if (paging) {
+    return res.status(200).json(
+      await listDoctorsAdmin(paging, {
+        status: req.query.status,
+        specialization: req.query.specialization,
+        sort: req.query.sort,
+      })
+    );
+  }
+  res.status(200).json({ success: true, data: await getAllDoctorsAdmin() });
 });
 
 export const createDoctor = asyncHandler(async (req, res) => {
@@ -211,8 +210,11 @@ export const deleteDoctor = asyncHandler(async (req, res) => {
 /* =================== Appointments =================== */
 
 export const getAppointments = asyncHandler(async (req, res) => {
-  const paging = parsePaging(req.query);
-  await sendList(res, await getAllAppointments(paging), paging, countAppointments);
+  const paging = parseListQuery(req.query);
+  if (paging) {
+    return res.status(200).json(await listAppointmentsAdmin(paging, { status: req.query.status, sort: req.query.sort }));
+  }
+  res.status(200).json({ success: true, data: await getAllAppointments() });
 });
 
 export const deleteAppointment = asyncHandler(async (req, res) => {
@@ -321,8 +323,11 @@ export const deleteAdminMedicine = asyncHandler(async (req, res) => {
 /* =================== Pharmacy Orders Controls =================== */
 
 export const getAdminOrders = asyncHandler(async (req, res) => {
-  const paging = parsePaging(req.query);
-  await sendList(res, await getAllOrdersAdminService(paging), paging, countOrdersAdmin);
+  const paging = parseListQuery(req.query);
+  if (paging) {
+    return res.status(200).json(await listOrdersAdmin(paging, { status: req.query.status, type: req.query.type }));
+  }
+  res.status(200).json({ success: true, data: await getAllOrdersAdminService() });
 });
 
 export const updateAdminOrderStatus = asyncHandler(async (req, res) => {

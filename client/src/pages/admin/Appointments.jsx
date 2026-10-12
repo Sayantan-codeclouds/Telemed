@@ -1,5 +1,4 @@
-import { useState, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   Loader2,
   Search,
@@ -16,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import adminApi from "@/api/adminApi";
+import { useAdminList, useDebouncedValue } from "@/hooks/useAdminList";
+import ListPagination from "@/components/admin/ListPagination";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { getProfileImageUrl } from "@/utils/imageUrl";
 import AdminRescheduleModal from "@/components/admin/AdminRescheduleModal";
@@ -41,11 +42,11 @@ const STATUS_LIST = [
   "NO_SHOW",
 ];
 
-const APPOINTMENTS_QUERY_KEY = ["admin-appointments"];
+const APPOINTMENTS_QUERY_KEY = "admin-appointments";
+const PAGE_SIZE = 25;
 
 export default function AdminAppointments() {
   const { formatPrice } = useCurrency();
-  const queryClient = useQueryClient();
 
   // Search & Filter & Sort state
   const [search, setSearch] = useState("");
@@ -55,20 +56,31 @@ export default function AdminAppointments() {
   const [rescheduleAppointment, setRescheduleAppointment] = useState(null);
   const [viewingAppointment, setViewingAppointment] = useState(null);
 
-  const { data: appointments = [], isLoading: loading } = useQuery({
-    queryKey: APPOINTMENTS_QUERY_KEY,
-    queryFn: async () => {
-      const { data } = await adminApi.get("/admin/appointments");
-      return data.data || [];
-    },
-    meta: { errorMessage: "Failed to load consultations." },
-  });
+  // Server-side paging, search, filters and sort.
+  const [page, setPage] = useState(1);
+  const debouncedSearch = useDebouncedValue(search);
+  const filterKey = JSON.stringify([debouncedSearch, statusFilter, sortBy]);
+  const [appliedFilterKey, setAppliedFilterKey] = useState(filterKey);
+  if (filterKey !== appliedFilterKey) {
+    setAppliedFilterKey(filterKey);
+    setPage(1);
+  }
 
-  const setAppointments = (updater) => {
-    queryClient.setQueryData(APPOINTMENTS_QUERY_KEY, (prev) =>
-      typeof updater === "function" ? updater(prev || []) : updater
-    );
-  };
+  const {
+    items: appointments,
+    pagination,
+    counts,
+    isLoading: loading,
+    isFetching,
+    setItems: setAppointments,
+    invalidate: refreshAppointments,
+  } = useAdminList(APPOINTMENTS_QUERY_KEY, "/admin/appointments", {
+    page,
+    limit: PAGE_SIZE,
+    search: debouncedSearch,
+    status: statusFilter,
+    sort: sortBy,
+  });
 
   const handleDeleteAppointment = async (id) => {
     if (!window.confirm("Are you sure you want to permanently delete this appointment record?")) {
@@ -80,6 +92,7 @@ export default function AdminAppointments() {
       const res = await adminApi.delete(`/admin/appointments/${id}`);
       toast.success(res.data.message || "Appointment deleted successfully.");
       setAppointments((prev) => prev.filter((a) => a._id !== id));
+      refreshAppointments();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to delete appointment.");
     } finally {
@@ -87,54 +100,8 @@ export default function AdminAppointments() {
     }
   };
 
-  // Filter and Sort Appointments
-  const processedAppointments = useMemo(() => {
-    let list = appointments.filter((a) => {
-      const term = search.toLowerCase().trim();
-      const patientName = `${a.patient?.firstName || ""} ${a.patient?.lastName || ""}`.toLowerCase();
-      const doctorName = `${a.doctor?.firstName || ""} ${a.doctor?.lastName || ""}`.toLowerCase();
-      const spec = (a.doctor?.specialization || "").toLowerCase();
-      const reason = (a.reason || "").toLowerCase();
-      const status = (a.status || "").toLowerCase();
-
-      const matchesSearch =
-        !term ||
-        patientName.includes(term) ||
-        doctorName.includes(term) ||
-        spec.includes(term) ||
-        reason.includes(term) ||
-        status.includes(term);
-
-      const matchesStatus =
-        statusFilter === "ALL" || (a.status || "").toUpperCase() === statusFilter;
-
-      return matchesSearch && matchesStatus;
-    });
-
-    list.sort((a, b) => {
-      if (sortBy === "newest") {
-        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-      }
-      if (sortBy === "oldest") {
-        return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
-      }
-      if (sortBy === "appt-date-asc") {
-        return new Date(a.appointmentDate || a.date || 0) - new Date(b.appointmentDate || b.date || 0);
-      }
-      if (sortBy === "appt-date-desc") {
-        return new Date(b.appointmentDate || b.date || 0) - new Date(a.appointmentDate || a.date || 0);
-      }
-      if (sortBy === "fee-desc") {
-        return Number(b.consultationFee ?? 0) - Number(a.consultationFee ?? 0);
-      }
-      if (sortBy === "fee-asc") {
-        return Number(a.consultationFee ?? 0) - Number(b.consultationFee ?? 0);
-      }
-      return 0;
-    });
-
-    return list;
-  }, [appointments, search, statusFilter, sortBy]);
+  // Rows arrive already searched, filtered and sorted by the server.
+  const processedAppointments = appointments;
 
   if (loading) {
     return (
@@ -154,7 +121,7 @@ export default function AdminAppointments() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Consultation Appointments</h1>
           <p className="text-gray-500 text-xs mt-0.5">
-            {appointments.length} total scheduled visits platform-wide
+            {counts.all ?? 0} total scheduled visits platform-wide
           </p>
         </div>
       </div>
@@ -221,8 +188,8 @@ export default function AdminAppointments() {
           {STATUS_LIST.map((st) => {
             const count =
               st === "ALL"
-                ? appointments.length
-                : appointments.filter((a) => (a.status || "").toUpperCase() === st).length;
+                ? counts.all ?? 0
+                : counts.byStatus?.[st] ?? 0;
 
             return (
               <button
@@ -460,6 +427,16 @@ export default function AdminAppointments() {
         </CardContent>
       </Card>
 
+      <ListPagination
+        page={pagination.page}
+        pages={pagination.pages}
+        total={pagination.total}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+        loading={isFetching}
+        noun="appointments"
+      />
+
       {/* Admin Reschedule Modal */}
       {rescheduleAppointment && (
         <AdminRescheduleModal
@@ -471,6 +448,8 @@ export default function AdminAppointments() {
             setAppointments((prev) =>
               prev.map((a) => (a._id === updatedAppt._id ? updatedAppt : a))
             );
+            // Status counts may have changed (e.g. pending -> confirmed).
+            refreshAppointments();
             if (viewingAppointment?._id === updatedAppt._id) {
               setViewingAppointment(updatedAppt);
             }

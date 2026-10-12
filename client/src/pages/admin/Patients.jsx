@@ -1,5 +1,4 @@
-import { useState, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   Loader2,
   Search,
@@ -18,15 +17,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import adminApi from "@/api/adminApi";
+import { useAdminList, useDebouncedValue } from "@/hooks/useAdminList";
+import ListPagination from "@/components/admin/ListPagination";
 import { getProfileImageUrl } from "@/utils/imageUrl";
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 const GENDERS = ["Male", "Female", "Other"];
 
-const PATIENTS_QUERY_KEY = ["admin-patients"];
+const PATIENTS_QUERY_KEY = "admin-patients";
+const PAGE_SIZE = 25;
 
 export default function AdminPatients() {
-  const queryClient = useQueryClient();
 
   // Search & Filter & Sort state
   const [search, setSearch] = useState("");
@@ -52,24 +53,32 @@ export default function AdminPatients() {
     status: "ACTIVE",
   });
 
-  const {
-    data: patients = [],
-    isLoading: loading,
-    refetch: fetchPatients,
-  } = useQuery({
-    queryKey: PATIENTS_QUERY_KEY,
-    queryFn: async () => {
-      const { data } = await adminApi.get("/admin/patients");
-      return data.data || [];
-    },
-    meta: { errorMessage: "Failed to load patient accounts." },
-  });
+  // Server-side paging, search, filters and sort.
+  const [page, setPage] = useState(1);
+  const debouncedSearch = useDebouncedValue(search);
+  const filterKey = JSON.stringify([debouncedSearch, statusFilter, genderFilter, sortBy]);
+  const [appliedFilterKey, setAppliedFilterKey] = useState(filterKey);
+  if (filterKey !== appliedFilterKey) {
+    setAppliedFilterKey(filterKey);
+    setPage(1);
+  }
 
-  const setPatients = (updater) => {
-    queryClient.setQueryData(PATIENTS_QUERY_KEY, (prev) =>
-      typeof updater === "function" ? updater(prev || []) : updater
-    );
-  };
+  const {
+    items: patients,
+    pagination,
+    counts,
+    isLoading: loading,
+    isFetching,
+    setItems: setPatients,
+    invalidate: refreshPatients,
+  } = useAdminList(PATIENTS_QUERY_KEY, "/admin/patients", {
+    page,
+    limit: PAGE_SIZE,
+    search: debouncedSearch,
+    status: statusFilter,
+    gender: genderFilter,
+    sort: sortBy,
+  });
 
   const handleOpenModal = () => {
     setFormData({
@@ -98,7 +107,7 @@ export default function AdminPatients() {
       const res = await adminApi.post("/admin/patients", formData);
       toast.success(res.data?.message || "Patient registered successfully!");
       setModalOpen(false);
-      fetchPatients();
+      refreshPatients();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to create patient account.");
     } finally {
@@ -122,6 +131,7 @@ export default function AdminPatients() {
       toast.success(
         `Patient ${patient.firstName} ${patient.lastName} is now ${newStatus === "ACTIVE" ? "🟢 ACTIVE (ON)" : "⚪ INACTIVE (OFF)"}`
       );
+      refreshPatients();
     } catch (error) {
       // Revert on error
       setPatients((prev) =>
@@ -147,6 +157,7 @@ export default function AdminPatients() {
       const res = await adminApi.delete(`/admin/patients/${id}`);
       toast.success(res.data.message || "Patient deleted successfully.");
       setPatients((prev) => prev.filter((p) => p._id !== id));
+      refreshPatients();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to delete patient.");
     } finally {
@@ -154,54 +165,8 @@ export default function AdminPatients() {
     }
   };
 
-  // Filter and Sort Patients
-  const processedPatients = useMemo(() => {
-    let list = patients.filter((p) => {
-      const term = search.toLowerCase().trim();
-      const fullName = `${p.firstName || ""} ${p.lastName || ""}`.toLowerCase();
-      const email = (p.email || "").toLowerCase();
-      const phone = p.phone || "";
-
-      const matchesSearch =
-        !term ||
-        fullName.includes(term) ||
-        email.includes(term) ||
-        phone.includes(term);
-
-      const matchesStatus =
-        statusFilter === "ALL" ||
-        (statusFilter === "ACTIVE" && p.status === "ACTIVE") ||
-        (statusFilter === "INACTIVE" && p.status !== "ACTIVE");
-
-      const matchesGender =
-        genderFilter === "ALL" ||
-        (p.gender || "").toLowerCase() === genderFilter.toLowerCase();
-
-      return matchesSearch && matchesStatus && matchesGender;
-    });
-
-    list.sort((a, b) => {
-      if (sortBy === "newest") {
-        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-      }
-      if (sortBy === "oldest") {
-        return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
-      }
-      if (sortBy === "name-asc") {
-        const nameA = `${a.firstName || ""} ${a.lastName || ""}`.trim().toLowerCase();
-        const nameB = `${b.firstName || ""} ${b.lastName || ""}`.trim().toLowerCase();
-        return nameA.localeCompare(nameB);
-      }
-      if (sortBy === "name-desc") {
-        const nameA = `${a.firstName || ""} ${a.lastName || ""}`.trim().toLowerCase();
-        const nameB = `${b.firstName || ""} ${b.lastName || ""}`.trim().toLowerCase();
-        return nameB.localeCompare(nameA);
-      }
-      return 0;
-    });
-
-    return list;
-  }, [patients, search, statusFilter, genderFilter, sortBy]);
+  // Rows arrive already searched, filtered and sorted by the server.
+  const processedPatients = patients;
 
   if (loading) {
     return (
@@ -211,8 +176,9 @@ export default function AdminPatients() {
     );
   }
 
-  const activeCount = patients.filter((p) => p.status === "ACTIVE").length;
-  const inactiveCount = patients.filter((p) => p.status !== "ACTIVE").length;
+  const totalCount = counts.all ?? 0;
+  const activeCount = counts.active ?? 0;
+  const inactiveCount = counts.inactive ?? 0;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -224,7 +190,7 @@ export default function AdminPatients() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Patient Accounts</h1>
           <p className="text-gray-500 text-xs mt-0.5">
-            {patients.length} patient accounts • <strong className="text-emerald-700">{activeCount} Active (ON)</strong> • <span className="text-slate-500">{inactiveCount} Inactive (OFF)</span>
+            {totalCount} patient accounts • <strong className="text-emerald-700">{activeCount} Active (ON)</strong> • <span className="text-slate-500">{inactiveCount} Inactive (OFF)</span>
           </p>
         </div>
 
@@ -308,7 +274,7 @@ export default function AdminPatients() {
             Status:
           </span>
           {[
-            { id: "ALL", label: `All Patients (${patients.length})` },
+            { id: "ALL", label: `All Patients (${totalCount})` },
             { id: "ACTIVE", label: `Active (${activeCount})` },
             { id: "INACTIVE", label: `Inactive (${inactiveCount})` },
           ].map((chip) => (
@@ -501,6 +467,16 @@ export default function AdminPatients() {
           </div>
         </CardContent>
       </Card>
+
+      <ListPagination
+        page={pagination.page}
+        pages={pagination.pages}
+        total={pagination.total}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+        loading={isFetching}
+        noun="patients"
+      />
 
       {/* Add Patient Modal */}
       {modalOpen && (

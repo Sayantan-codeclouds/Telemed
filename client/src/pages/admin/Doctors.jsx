@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Loader2,
   Search,
@@ -19,15 +19,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import adminApi from "@/api/adminApi";
+import { useAdminList, useDebouncedValue } from "@/hooks/useAdminList";
+import ListPagination from "@/components/admin/ListPagination";
 import api from "@/api/axios";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { getProfileImageUrl } from "@/utils/imageUrl";
 
-const DOCTORS_QUERY_KEY = ["admin-doctors"];
+const DOCTORS_QUERY_KEY = "admin-doctors";
+const PAGE_SIZE = 25;
 
 export default function AdminDoctors() {
   const { formatPrice, currencySign } = useCurrency();
-  const queryClient = useQueryClient();
 
   // Search & Filter & Sort state
   const [search, setSearch] = useState("");
@@ -63,17 +65,31 @@ export default function AdminDoctors() {
     status: "ACTIVE",
   });
 
+  // Server-side paging, search, filters and sort.
+  const [page, setPage] = useState(1);
+  const debouncedSearch = useDebouncedValue(search);
+  const filterKey = JSON.stringify([debouncedSearch, statusFilter, specFilter, sortBy]);
+  const [appliedFilterKey, setAppliedFilterKey] = useState(filterKey);
+  if (filterKey !== appliedFilterKey) {
+    setAppliedFilterKey(filterKey);
+    setPage(1);
+  }
+
   const {
-    data: doctors = [],
+    items: doctors,
+    pagination,
+    counts,
     isLoading: loading,
-    refetch: fetchDoctors,
-  } = useQuery({
-    queryKey: DOCTORS_QUERY_KEY,
-    queryFn: async () => {
-      const { data } = await adminApi.get("/admin/doctors");
-      return data.data || [];
-    },
-    meta: { errorMessage: "Failed to load doctor network." },
+    isFetching,
+    setItems: setDoctors,
+    invalidate: refreshDoctors,
+  } = useAdminList(DOCTORS_QUERY_KEY, "/admin/doctors", {
+    page,
+    limit: PAGE_SIZE,
+    search: debouncedSearch,
+    status: statusFilter,
+    specialization: specFilter,
+    sort: sortBy,
   });
 
   const { data: specializations = [] } = useQuery({
@@ -83,12 +99,6 @@ export default function AdminDoctors() {
       return data?.data?.length > 0 ? data.data.map((s) => s.name) : [];
     },
   });
-
-  const setDoctors = (updater) => {
-    queryClient.setQueryData(DOCTORS_QUERY_KEY, (prev) =>
-      typeof updater === "function" ? updater(prev || []) : updater
-    );
-  };
 
   const handleOpenModal = () => {
     setFormData({
@@ -164,7 +174,7 @@ export default function AdminDoctors() {
       const res = await adminApi.post("/admin/doctors", formData);
       toast.success(res.data?.message || "Doctor registered successfully!");
       setModalOpen(false);
-      fetchDoctors();
+      refreshDoctors();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to create doctor account.");
     } finally {
@@ -188,6 +198,7 @@ export default function AdminDoctors() {
       toast.success(
         `Dr. ${doctor.firstName} ${doctor.lastName} is now ${newStatus === "ACTIVE" ? "🟢 ACTIVE (ON)" : "⚪ INACTIVE (OFF)"}`
       );
+      refreshDoctors();
     } catch (error) {
       // Revert on error
       setDoctors((prev) =>
@@ -213,6 +224,7 @@ export default function AdminDoctors() {
       const res = await adminApi.delete(`/admin/doctors/${id}`);
       toast.success(res.data.message || "Doctor deleted successfully.");
       setDoctors((prev) => prev.filter((d) => d._id !== id));
+      refreshDoctors();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to delete doctor.");
     } finally {
@@ -220,63 +232,8 @@ export default function AdminDoctors() {
     }
   };
 
-  // Filter and Sort Doctors
-  const processedDoctors = useMemo(() => {
-    let list = doctors.filter((d) => {
-      const term = search.toLowerCase().trim();
-      const fullName = `${d.firstName || ""} ${d.lastName || ""}`.toLowerCase();
-      const email = (d.email || "").toLowerCase();
-      const spec = (d.specialization || "").toLowerCase();
-      const hospital = (d.hospital || "").toLowerCase();
-
-      const matchesSearch =
-        !term ||
-        fullName.includes(term) ||
-        email.includes(term) ||
-        spec.includes(term) ||
-        hospital.includes(term);
-
-      const matchesStatus =
-        statusFilter === "ALL" ||
-        (statusFilter === "ACTIVE" && d.status === "ACTIVE") ||
-        (statusFilter === "INACTIVE" && d.status !== "ACTIVE") ||
-        (statusFilter === "PENDING_APPROVAL" && d.status === "PENDING_APPROVAL");
-
-      const matchesSpec =
-        specFilter === "ALL" ||
-        (d.specialization || "").toLowerCase() === specFilter.toLowerCase();
-
-      return matchesSearch && matchesStatus && matchesSpec;
-    });
-
-    list.sort((a, b) => {
-      if (sortBy === "newest") {
-        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-      }
-      if (sortBy === "oldest") {
-        return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
-      }
-      if (sortBy === "name-asc") {
-        const nameA = `${a.firstName || ""} ${a.lastName || ""}`.trim().toLowerCase();
-        const nameB = `${b.firstName || ""} ${b.lastName || ""}`.trim().toLowerCase();
-        return nameA.localeCompare(nameB);
-      }
-      if (sortBy === "name-desc") {
-        const nameA = `${a.firstName || ""} ${a.lastName || ""}`.trim().toLowerCase();
-        const nameB = `${b.firstName || ""} ${b.lastName || ""}`.trim().toLowerCase();
-        return nameB.localeCompare(nameA);
-      }
-      if (sortBy === "fee-desc") {
-        return Number(b.consultationFee ?? 500) - Number(a.consultationFee ?? 500);
-      }
-      if (sortBy === "fee-asc") {
-        return Number(a.consultationFee ?? 500) - Number(b.consultationFee ?? 500);
-      }
-      return 0;
-    });
-
-    return list;
-  }, [doctors, search, statusFilter, specFilter, sortBy]);
+  // Rows arrive already searched, filtered and sorted by the server.
+  const processedDoctors = doctors;
 
   if (loading) {
     return (
@@ -286,9 +243,10 @@ export default function AdminDoctors() {
     );
   }
 
-  const activeCount = doctors.filter((d) => d.status === "ACTIVE").length;
-  const inactiveCount = doctors.filter((d) => d.status !== "ACTIVE").length;
-  const pendingCount = doctors.filter((d) => d.status === "PENDING_APPROVAL").length;
+  const totalCount = counts.all ?? 0;
+  const activeCount = counts.active ?? 0;
+  const inactiveCount = counts.inactive ?? 0;
+  const pendingCount = counts.pending ?? 0;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -300,7 +258,7 @@ export default function AdminDoctors() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Doctor Network Oversight</h1>
           <p className="text-gray-500 text-xs mt-0.5">
-            {doctors.length} doctors total • <strong className="text-emerald-700">{activeCount} Active (ON)</strong> • <span className="text-slate-500">{inactiveCount} Inactive (OFF)</span>
+            {totalCount} doctors total • <strong className="text-emerald-700">{activeCount} Active (ON)</strong> • <span className="text-slate-500">{inactiveCount} Inactive (OFF)</span>
           </p>
         </div>
 
@@ -387,7 +345,7 @@ export default function AdminDoctors() {
             Status:
           </span>
           {[
-            { id: "ALL", label: `All Doctors (${doctors.length})` },
+            { id: "ALL", label: `All Doctors (${totalCount})` },
             { id: "ACTIVE", label: `Active (${activeCount})` },
             { id: "INACTIVE", label: `Inactive (${inactiveCount})` },
             { id: "PENDING_APPROVAL", label: `Pending Approval (${pendingCount})` },
@@ -614,6 +572,16 @@ export default function AdminDoctors() {
           </div>
         </CardContent>
       </Card>
+
+      <ListPagination
+        page={pagination.page}
+        pages={pagination.pages}
+        total={pagination.total}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+        loading={isFetching}
+        noun="doctors"
+      />
 
       {/* Add Doctor Modal */}
       {modalOpen && (
