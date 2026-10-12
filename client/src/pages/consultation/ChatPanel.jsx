@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { Send, Loader2 } from "lucide-react";
@@ -31,11 +31,15 @@ export default function ChatPanel({ user, doctor }) {
     meta: { onError: (err) => console.error("Failed to load chat history:", err) },
   });
 
-  const setMessages = (updater) => {
-    queryClient.setQueryData(chatQueryKey, (prev) =>
-      typeof updater === "function" ? updater(prev || []) : updater
-    );
-  };
+  // Stable setter so the socket listeners below aren't re-registered on every render.
+  const setMessages = useCallback(
+    (updater) => {
+      queryClient.setQueryData(["chat-messages", appointmentId, isDoctor], (prev) =>
+        typeof updater === "function" ? updater(prev || []) : updater
+      );
+    },
+    [queryClient, appointmentId, isDoctor]
+  );
 
   useEffect(() => {
     const handleReceiveMessage = (data) => {
@@ -73,7 +77,7 @@ export default function ChatPanel({ user, doctor }) {
       socket.off("typing", handleTyping);
       socket.off("stop-typing", handleStopTyping);
     };
-  }, [appointmentId, apiClient]);
+  }, [appointmentId, apiClient, setMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

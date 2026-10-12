@@ -8,6 +8,7 @@ import {
   sendDoctorResetPasswordEmail,
 } from "../mail/mail.service.js";
 import { formatProfileImage } from "../shared/utils/fileUrl.js";
+import hashToken from "../shared/utils/hashToken.js";
 
 export const verifyDoctorEmail = async (token) => {
   // Only accept a plain string so query operators like { $ne: null } can't be injected.
@@ -16,7 +17,7 @@ export const verifyDoctorEmail = async (token) => {
   }
 
   const doctor = await Doctor.findOne({
-    verificationToken: token,
+    verificationToken: hashToken(token),
     verificationTokenExpires: {
       $gt: new Date(),
     },
@@ -53,7 +54,7 @@ export const registerDoctor = async (data) => {
     phone: data.phone,
     // Self-registered doctors can't practise until an admin verifies their credentials.
     status: "PENDING_APPROVAL",
-    verificationToken,
+    verificationToken: hashToken(verificationToken),
     verificationTokenExpires: new Date(
       Date.now() + 24 * 60 * 60 * 1000
     ),
@@ -271,7 +272,7 @@ export const forgotDoctorPassword = async (email) => {
 
   const resetToken = crypto.randomBytes(32).toString("hex");
 
-  doctor.resetPasswordToken = resetToken;
+  doctor.resetPasswordToken = hashToken(resetToken);
   doctor.resetPasswordTokenExpires = new Date(Date.now() + 60 * 60 * 1000);
 
   await doctor.save();
@@ -289,7 +290,7 @@ export const resetDoctorPassword = async (token, password) => {
   }
 
   const doctor = await Doctor.findOne({
-    resetPasswordToken: token,
+    resetPasswordToken: hashToken(token),
     resetPasswordTokenExpires: {
       $gt: new Date(),
     },

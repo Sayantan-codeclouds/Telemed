@@ -339,9 +339,9 @@ export default function EditProfileDrawer({
     const bmiVal = (weightInKg / (heightInMeters * heightInMeters)).toFixed(1);
     const num = parseFloat(bmiVal);
 
-    let category = "Normal";
-    let color = "text-emerald-700 bg-emerald-50 border-emerald-200";
-    let note = "Optimal healthy body weight range.";
+    let category;
+    let color;
+    let note;
 
     if (num < 18.5) {
       category = "Underweight";

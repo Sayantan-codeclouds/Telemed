@@ -37,6 +37,7 @@ import {
   getAdminOrders,
   updateAdminOrderStatus,
   resendAdminOrderInvoice,
+  refundAdminOrder,
   createAdminOrderForCustomer,
   getAdminCrmSettings,
   getAdminCrmSettingsSummary,
@@ -108,6 +109,8 @@ router.get("/pharmacy/orders", getAdminOrders);
 router.post("/pharmacy/orders", createAdminOrderForCustomer);
 router.patch("/pharmacy/orders/:id/status", updateAdminOrderStatus);
 router.post("/pharmacy/orders/:id/resend-invoice", resendAdminOrderInvoice);
+// Moves money: managers only.
+router.post("/pharmacy/orders/:id/refund", authorizeRoles("SuperAdmin", "Admin"), refundAdminOrder);
 
 // CRM & Platform Settings (SuperAdmin / Admin)
 // Full settings (secrets masked) are SuperAdmin-only, like the Settings page.

@@ -246,6 +246,14 @@ const orderSchema = new mongoose.Schema(
       enum: ["PENDING", "PAID", "FAILED", "REFUND_PENDING", "REFUNDED"],
       default: "PAID",
     },
+    // Set when a refund was issued through the CRM from the admin.
+    refundDetails: {
+      provider: { type: String },
+      amount: { type: Number },
+      transactionIds: [{ type: String }],
+      refundedAt: { type: Date },
+      refundedBy: { type: String },
+    },
     stickyCrmOrderId: {
       type: String,
       default: null,

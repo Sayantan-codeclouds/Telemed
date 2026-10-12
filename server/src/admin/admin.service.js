@@ -21,6 +21,7 @@ import { uploadToCloud } from "../shared/utils/cloudStorage.js";
 import { sendAccountSetupEmail } from "../mail/mail.service.js";
 import { generateTotpSecret, verifyTotpCode, buildOtpAuthUrl } from "../shared/utils/totp.js";
 import crypto from "crypto";
+import hashToken from "../shared/utils/hashToken.js";
 
 /* =================== Admin-created account credentials =================== */
 
@@ -267,7 +268,7 @@ export const createPatientService = async (data) => {
     isEmailVerified: true,
     status: status || "ACTIVE",
     ...(credentials.setupToken && {
-      resetPasswordToken: credentials.setupToken,
+      resetPasswordToken: hashToken(credentials.setupToken),
       resetPasswordTokenExpires: new Date(Date.now() + ACCOUNT_SETUP_HOURS * 60 * 60 * 1000),
     }),
   });
@@ -453,7 +454,7 @@ export const createDoctorService = async (data) => {
     isEmailVerified: true,
     status: status || "ACTIVE",
     ...(credentials.setupToken && {
-      resetPasswordToken: credentials.setupToken,
+      resetPasswordToken: hashToken(credentials.setupToken),
       resetPasswordTokenExpires: new Date(Date.now() + ACCOUNT_SETUP_HOURS * 60 * 60 * 1000),
     }),
   });

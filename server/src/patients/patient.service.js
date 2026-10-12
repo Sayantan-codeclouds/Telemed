@@ -16,6 +16,7 @@ import {
   getProfileImageFilename,
 } from "../shared/utils/fileUrl.js";
 import { uploadToCloud } from "../shared/utils/cloudStorage.js";
+import hashToken from "../shared/utils/hashToken.js";
 
 export const registerPatient = async (patientData) => {
   // Validate request
@@ -53,7 +54,7 @@ export const registerPatient = async (patientData) => {
     email: validatedData.email.toLowerCase(),
     phone: validatedData.phone,
     password: hashedPassword,
-    verificationToken,
+    verificationToken: hashToken(verificationToken),
     verificationTokenExpires,
   });
 
@@ -115,7 +116,7 @@ export const verifyPatientEmail = async (token) => {
   }
 
   const patient = await Patient.findOne({
-    verificationToken: token,
+    verificationToken: hashToken(token),
   });
 
   if (!patient) {
@@ -150,7 +151,7 @@ export const forgotPassword = async (email) => {
 
   const resetToken = crypto.randomBytes(32).toString("hex");
 
-  patient.resetPasswordToken = resetToken;
+  patient.resetPasswordToken = hashToken(resetToken);
   patient.resetPasswordTokenExpires = new Date(Date.now() + 60 * 60 * 1000);
 
   await patient.save();
@@ -172,7 +173,7 @@ export const resetPassword = async (data) => {
   }
 
   const patient = await Patient.findOne({
-    resetPasswordToken: data.token,
+    resetPasswordToken: hashToken(data.token),
     resetPasswordTokenExpires: {
       $gt: new Date(),
     },

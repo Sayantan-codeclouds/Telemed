@@ -7,6 +7,8 @@ import { createNotificationService } from "../notifications/notification.service
 import { sendOrderInvoiceEmail } from "../mail/mail.service.js";
 import { validateAndApplyCouponService } from "../coupons/coupon.service.js";
 import { validateAndApplyGiftCardService } from "../giftcards/giftcard.service.js";
+import GiftCard from "../giftcards/giftcard.model.js";
+import { refundOrderViaCrmService } from "./crmRefund.service.js";
 import escapeRegex from "../shared/utils/escapeRegex.js";
 
 
@@ -294,7 +296,7 @@ const reserveStock = async (items) => {
     const updated = await Medicine.findOneAndUpdate(
       { _id: item.medicine, inStock: true, stockQuantity: { $gte: item.quantity } },
       { $inc: { stockQuantity: -item.quantity } },
-      { new: true }
+      { returnDocument: "after" }
     );
     if (!updated) {
       await release();
@@ -307,6 +309,27 @@ const reserveStock = async (items) => {
   }
 
   return release;
+};
+
+/**
+ * Atomically takes `amount` from a gift card's local balance. Returns a
+ * release() that refunds it (used when payment fails). Vrio remains the
+ * source of truth; its balance overwrites this one on the next sync.
+ */
+const reserveGiftCardBalance = async (code, amount) => {
+  const updated = await GiftCard.findOneAndUpdate(
+    { giftCardCode: code, balanceAmount: { $gte: amount } },
+    { $inc: { balanceAmount: -amount } },
+    { returnDocument: "after" }
+  );
+  if (!updated) {
+    throw AppError.badRequest(`Gift Card "${code}" no longer has enough balance. Please re-apply it.`);
+  }
+  return async () => {
+    await GiftCard.updateOne({ _id: updated._id }, { $inc: { balanceAmount: amount } }).catch((err) =>
+      console.error("[Pharmacy] Failed to release reserved gift card balance:", err?.message || err)
+    );
+  };
 };
 
 export const createOrderService = async (patientId, data) => {
@@ -388,6 +411,7 @@ export const createOrderService = async (patientId, data) => {
   }
 
   let giftCards;
+  let giftCardReservation = null;
   if (coupon?.type === "GIFT_CARD") {
     // A gift-card-type coupon is also forwarded to the CRM as a gift card.
     giftCards = [{ gift_card_code: coupon.code, gift_card_apply: discountAmount }];
@@ -403,6 +427,9 @@ export const createOrderService = async (patientId, data) => {
         orderTotal: Math.max(0, total - discountAmount),
       });
       giftCards = [{ gift_card_code: giftCard.code, gift_card_apply: giftCard.applyAmount }];
+      if (giftCard.applyAmount > 0) {
+        giftCardReservation = { code: giftCard.code, amount: giftCard.applyAmount };
+      }
     }
   }
 
@@ -418,9 +445,23 @@ export const createOrderService = async (patientId, data) => {
   const cardTypeId = data.paymentDetails?.cardTypeId || detectedCard.cardTypeId;
   const cardType = data.paymentDetails?.cardType || detectedCard.cardType;
 
-  // Reserve stock before charging so two buyers can't take the last units;
-  // it is released again if the payment does not go through.
+  // Reserve stock (and the gift card amount) before charging so two buyers
+  // can't take the last units or spend the same balance twice; both are
+  // released again if the payment does not go through.
   const releaseStock = await reserveStock(verifiedItems);
+  let releaseGiftCard = async () => {};
+  if (giftCardReservation) {
+    try {
+      releaseGiftCard = await reserveGiftCardBalance(giftCardReservation.code, giftCardReservation.amount);
+    } catch (err) {
+      await releaseStock();
+      throw err;
+    }
+  }
+  const releaseReservations = async () => {
+    await releaseStock();
+    await releaseGiftCard();
+  };
 
   // Process order with Vrio CRM
   let vrioResult;
@@ -466,14 +507,21 @@ export const createOrderService = async (patientId, data) => {
       },
     });
   } catch (err) {
-    await releaseStock();
-    throw err;
+    await releaseReservations();
+    // A live decline/gateway error is the customer's to fix (card details),
+    // not a server fault: answer 400 with the gateway's reason.
+    if (err instanceof AppError) throw err;
+    throw AppError.badRequest(
+      typeof err?.message === "string" && err.message
+        ? `Payment failed: ${err.message}`
+        : "Payment processing failed via CRM gateway. Please verify your card details."
+    );
   }
 
   // In test mode a declined charge comes back as { success: false } instead of
   // throwing; never record that as a paid order (same rule as consultations).
   if (!vrioResult?.success) {
-    await releaseStock();
+    await releaseReservations();
     const reason = [vrioResult?.error, vrioResult?.crmResponse?.error].find(
       (value) => typeof value === "string" && value
     );
@@ -746,6 +794,37 @@ export const deleteMedicineService = async (id) => {
 
   await Medicine.findByIdAndDelete(id);
   return { success: true, message: "Medicine removed from catalog." };
+};
+
+/**
+ * Issues the refund for a cancelled paid order through the CRM (Vrio), then
+ * marks it REFUNDED and notifies the patient. A partial refund (less than
+ * the order total could be matched to charges) is recorded but left pending.
+ */
+export const refundOrderAdminService = async (orderId, admin) => {
+  const order = await Order.findById(orderId);
+  if (!order) throw AppError.notFound("Order not found.");
+  if (order.paymentStatus !== "REFUND_PENDING") {
+    throw AppError.badRequest("Only cancelled orders awaiting a refund can be refunded.");
+  }
+
+  const result = await refundOrderViaCrmService(order);
+
+  order.refundDetails = {
+    provider: result.provider,
+    amount: result.amount,
+    transactionIds: result.transactionIds,
+    refundedAt: new Date(),
+    refundedBy: admin?.email || "",
+  };
+  await order.save();
+
+  const fullyRefunded = result.amount >= Math.round(Number(order.totalAmount || 0) * 100) / 100;
+  const updated = fullyRefunded
+    ? await updateOrderStatusAdminService(orderId, undefined, "REFUNDED")
+    : await order.populate("patient", "firstName lastName email phone");
+
+  return { order: updated, refundedAmount: result.amount, fullyRefunded };
 };
 
 const ORDER_STATUS_LABELS = {

@@ -37,6 +37,7 @@ import {
   deleteMedicineService,
   getAllOrdersAdminService,
   updateOrderStatusAdminService,
+  refundOrderAdminService,
   resendOrderInvoiceAdminService,
   createOrderService,
 } from "../pharmacy/pharmacy.service.js";
@@ -343,6 +344,17 @@ export const updateAdminOrderStatus = asyncHandler(async (req, res) => {
       order.paymentStatus === "REFUND_PENDING"
         ? `Order status updated to ${order.status}. Issue the refund in the CRM, then mark it refunded.`
         : `Order status updated to ${order.status}.`,
+    data: order,
+  });
+});
+
+export const refundAdminOrder = asyncHandler(async (req, res) => {
+  const { order, refundedAmount, fullyRefunded } = await refundOrderAdminService(req.params.id, req.admin);
+  res.status(200).json({
+    success: true,
+    message: fullyRefunded
+      ? `Refund of ${refundedAmount.toFixed(2)} issued through the CRM. The patient has been notified.`
+      : `Only ${refundedAmount.toFixed(2)} could be refunded automatically; refund the rest in the CRM, then mark it refunded.`,
     data: order,
   });
 });

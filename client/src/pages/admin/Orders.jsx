@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   ShoppingBag,
   Search,
@@ -30,6 +31,7 @@ import { toast } from "sonner";
 import adminApi from "@/api/adminApi";
 import { useAdminList, useDebouncedValue } from "@/hooks/useAdminList";
 import ListPagination from "@/components/admin/ListPagination";
+import { getCurrentAdminRole } from "@/lib/adminAccess";
 
 const PAGE_SIZE = 25;
 
@@ -351,6 +353,33 @@ export default function AdminOrders() {
     }
   };
 
+  // Automatic refunds go through Vrio and are limited to SuperAdmin/Admin.
+  const { data: crmSummary } = useQuery({
+    queryKey: ["admin-crm-summary"],
+    queryFn: async () => (await adminApi.get("/admin/crm-settings/summary")).data?.data || {},
+  });
+  const canAutoRefund =
+    (crmSummary?.crmProvider || "vrio") === "vrio" && getCurrentAdminRole() !== "CustomerSupport";
+
+  const handleIssueRefund = async (order) => {
+    if (!window.confirm(`Refund this order through Vrio now? The charged amount (${order.totalAmount}) is returned to the customer's card.`)) {
+      return;
+    }
+    setUpdatingId(order._id);
+    try {
+      const res = await adminApi.post(`/admin/pharmacy/orders/${order._id}/refund`);
+      const paymentStatus = res.data?.data?.paymentStatus;
+      if (paymentStatus) {
+        setOrders((prev) => prev.map((o) => (o._id === order._id ? { ...o, paymentStatus } : o)));
+      }
+      toast.success(res.data?.message || "Refund issued.");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Automatic refund failed. Refund in the CRM, then mark it refunded.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   const handleMarkRefunded = async (orderId) => {
     if (!window.confirm("Confirm the refund has been issued in the CRM? The patient will be notified.")) {
       return;
@@ -667,11 +696,22 @@ export default function AdminOrders() {
                             <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5">
                               Refund pending
                             </span>
+                            {canAutoRefund && (
+                              <button
+                                type="button"
+                                disabled={isUpdating}
+                                onClick={() => handleIssueRefund(order)}
+                                className="text-[10px] font-bold text-emerald-700 hover:underline disabled:opacity-50"
+                              >
+                                Issue refund
+                              </button>
+                            )}
                             <button
                               type="button"
                               disabled={isUpdating}
                               onClick={() => handleMarkRefunded(order._id)}
                               className="text-[10px] font-bold text-indigo-600 hover:underline disabled:opacity-50"
+                              title="Use after refunding in the CRM dashboard"
                             >
                               Mark refunded
                             </button>

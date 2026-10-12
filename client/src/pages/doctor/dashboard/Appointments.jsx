@@ -117,7 +117,7 @@ export default function DoctorAppointments() {
       const matchesSearch =
         !term || patientName.includes(term) || reasonText.includes(term);
 
-      let matchesTab = true;
+      let matchesTab;
       if (activeTab === "TODAY") {
         matchesTab = new Date(appt.appointmentDate).toDateString() === todayStr;
       } else if (activeTab === "UPCOMING") {

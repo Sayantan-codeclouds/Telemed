@@ -51,6 +51,12 @@ app.use(auditAdminActions);
 /**
  * Static Files — Profile images & uploads
  */
+// Lab reports are medical records: never served statically, only through
+// signed links (GET /api/lab-reports/file/:token).
+app.use("/uploads/lab-reports", (req, res) => {
+  res.status(404).json({ success: false, message: "Not found." });
+});
+
 app.use(
   "/uploads",
   express.static(path.join(process.cwd(), "src", "uploads"))

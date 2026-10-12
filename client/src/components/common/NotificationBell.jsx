@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
@@ -67,19 +67,26 @@ export default function NotificationBell({ role = "patient" }) {
     enabled: hasToken(),
   });
 
-  const setNotifications = (updater) => {
-    queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY(role), (prev) => ({
-      notifications: typeof updater === "function" ? updater(prev?.notifications || []) : updater,
-      unreadCount: prev?.unreadCount || 0,
-    }));
-  };
+  // Stable setters so the socket listener below isn't re-registered on every render.
+  const setNotifications = useCallback(
+    (updater) => {
+      queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY(role), (prev) => ({
+        notifications: typeof updater === "function" ? updater(prev?.notifications || []) : updater,
+        unreadCount: prev?.unreadCount || 0,
+      }));
+    },
+    [queryClient, role]
+  );
 
-  const setUnreadCount = (updater) => {
-    queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY(role), (prev) => ({
-      notifications: prev?.notifications || [],
-      unreadCount: typeof updater === "function" ? updater(prev?.unreadCount || 0) : updater,
-    }));
-  };
+  const setUnreadCount = useCallback(
+    (updater) => {
+      queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY(role), (prev) => ({
+        notifications: prev?.notifications || [],
+        unreadCount: typeof updater === "function" ? updater(prev?.unreadCount || 0) : updater,
+      }));
+    },
+    [queryClient, role]
+  );
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem(role) || "{}");
@@ -95,7 +102,7 @@ export default function NotificationBell({ role = "patient" }) {
       socket.on(eventName, handleNewNotification);
       return () => socket.off(eventName, handleNewNotification);
     }
-  }, [role]);
+  }, [role, setNotifications, setUnreadCount]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {

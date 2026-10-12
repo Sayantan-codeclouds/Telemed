@@ -9,9 +9,9 @@ import fs from "fs";
  * lab reports — silently disappears while the database keeps pointing at it.
  *
  * This module moves the file to Cloudinary and returns its permanent URL. The
- * caller stores that URL in place of the bare filename; the existing URL
- * resolvers (getProfileImage / getLabReportUrl) already pass full http(s) URLs
- * through untouched, so nothing downstream needs to change.
+ * caller stores that URL in place of the bare filename. Profile images are
+ * public and served by their URL; lab reports are uploaded as private
+ * ("authenticated") assets and only ever streamed through the API.
  *
  * Every failure path returns null rather than throwing, so an unconfigured or
  * unreachable Cloudinary degrades to the previous local-disk behaviour instead
@@ -48,6 +48,8 @@ const getClient = async () => {
  * @param {string} localFilePath Absolute path multer wrote the file to.
  * @param {string} folder Logical folder, e.g. "profile-images" | "lab-reports".
  * @param {object} [options]
+ * @param {"upload"|"authenticated"} [options.deliveryType] "authenticated" keeps the
+ *   asset private: it can only be fetched with a signed URL (used for lab reports).
  * @param {string} [options.mimetype] Used to pick the right Cloudinary resource
  *   type. Documents (PDFs) are stored as "raw" so they're preserved byte-exact
  *   rather than being treated as images and rasterised — important for medical
@@ -57,7 +59,7 @@ const getClient = async () => {
 export const uploadToCloud = async (localFilePath, folder, options = {}) => {
   if (!isCloudStorageEnabled() || !localFilePath) return null;
 
-  const { mimetype } = options;
+  const { mimetype, deliveryType = "upload" } = options;
   const resourceType = !mimetype
     ? "auto"
     : mimetype.startsWith("image/")
@@ -70,6 +72,7 @@ export const uploadToCloud = async (localFilePath, folder, options = {}) => {
     const result = await cloudinary.uploader.upload(localFilePath, {
       folder: `teleclinic/${folder}`,
       resource_type: resourceType,
+      type: deliveryType,
       overwrite: true,
     });
 
@@ -95,14 +98,36 @@ export const uploadToCloud = async (localFilePath, folder, options = {}) => {
  * extension is part of the id; for image/video it is not.
  */
 const parseCloudinaryUrl = (url) => {
-  const match = /\/(image|video|raw)\/upload\/(?:v\d+\/)?(.+)$/.exec(url);
+  // Authenticated/private URLs also carry a "s--<signature>--" segment.
+  const match = /\/(image|video|raw)\/(upload|authenticated|private)\/(?:s--[^/]+--\/)?(?:v\d+\/)?([^?#]+)/.exec(url);
   if (!match) return null;
 
-  const [, resourceType, rest] = match;
+  const [, resourceType, deliveryType, rest] = match;
+  const extension = (/\.([a-z0-9]+)$/i.exec(rest) || [])[1] || "";
   const publicId =
     resourceType === "raw" ? rest : rest.replace(/\.[a-z0-9]+$/i, "");
 
-  return { resourceType, publicId };
+  return { resourceType, deliveryType, publicId, extension };
+};
+
+/**
+ * URL the server can fetch a stored asset from. Public assets are returned
+ * as-is; authenticated/private ones get a freshly signed delivery URL.
+ * Never send the result to the browser for private files; stream it instead.
+ */
+export const getCloudFetchUrl = async (storedUrl) => {
+  const parsed = typeof storedUrl === "string" ? parseCloudinaryUrl(storedUrl) : null;
+  if (!parsed || parsed.deliveryType === "upload") return storedUrl;
+  if (!isCloudStorageEnabled()) return null;
+
+  const cloudinary = await getClient();
+  return cloudinary.url(parsed.publicId, {
+    resource_type: parsed.resourceType,
+    type: parsed.deliveryType,
+    sign_url: true,
+    secure: true,
+    ...(parsed.resourceType !== "raw" && parsed.extension && { format: parsed.extension }),
+  });
 };
 
 /**
@@ -126,6 +151,7 @@ export const deleteFromCloud = async (storedUrl) => {
     const cloudinary = await getClient();
     await cloudinary.uploader.destroy(parsed.publicId, {
       resource_type: parsed.resourceType,
+      type: parsed.deliveryType,
       invalidate: true,
     });
     return true;

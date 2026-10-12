@@ -1,3 +1,4 @@
+import { createFileToken } from "./signedFileLink.js";
 export const getProfileImageFilename = (value) => {
   if (typeof value !== "string" || !value.trim()) {
     return null;
@@ -135,36 +136,20 @@ export const formatChatMessageProfileImage = (message) => {
   };
 };
 
-export const getLabReportUrl = (filename) => {
-  if (!filename || typeof filename !== "string") {
-    return null;
-  }
-
-  const trimmed = filename.trim();
-  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith("data:")) {
-    return trimmed;
-  }
-
-  const cleanFilename = trimmed
-    .split(/[?#]/, 1)[0]
-    .replace(/\\/g, "/")
-    .split("/")
-    .pop();
-
-  if (!cleanFilename) {
-    return null;
-  }
-
-  const appUrl = getEffectiveAppUrl();
-  return `${appUrl}/uploads/lab-reports/${cleanFilename}`;
-};
+/**
+ * Lab reports are medical records: the API never hands out the storage URL.
+ * `fileUrl` becomes a short-lived signed link to GET /api/lab-reports/file/:token,
+ * which streams the file (works as <a href>, <img src> and <iframe src>).
+ */
+export const getLabReportFileLink = (reportId) =>
+  `${getEffectiveAppUrl()}/api/lab-reports/file/${createFileToken(reportId)}`;
 
 export const formatLabReport = (report) => {
   if (!report) return report;
   const value = report.toObject ? report.toObject() : report;
   return {
     ...value,
-    fileUrl: getLabReportUrl(value.fileUrl),
+    fileUrl: value.fileUrl ? getLabReportFileLink(value._id) : null,
     patient: formatProfileImage(value.patient),
     doctor: formatProfileImage(value.doctor),
   };

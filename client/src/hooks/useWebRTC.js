@@ -117,7 +117,9 @@ function createVirtualMediaStream(userTitle = "Doctor", userName = "") {
       const silentAudio = dest.stream.getAudioTracks()[0];
       if (silentAudio) stream.addTrack(silentAudio);
     }
-  } catch {}
+  } catch {
+    // AudioContext unavailable: the placeholder stream simply has no audio track.
+  }
 
   stream.__stopAnimation = () => { if (animId) cancelAnimationFrame(animId); };
   return stream;
@@ -144,13 +146,18 @@ export default function useWebRTC(roomId, user) {
 
   // Doctor = impolite (initiates offers), Patient = polite (responds)
   const isPolite = user?.type !== "Doctor";
+  const userName = user?.name;
 
   // ─── HELPER: drain queued ICE candidates ─────────────────────────────────
   const drainCandidates = async (pc) => {
     const queued = [...pendingCandidates.current];
     pendingCandidates.current = [];
     for (const c of queued) {
-      try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(c));
+      } catch {
+        // Stale candidate from a previous negotiation; safe to drop.
+      }
     }
   };
 
@@ -174,14 +181,14 @@ export default function useWebRTC(roomId, user) {
       socket.emit("video-offer", {
         roomId,
         offer: pc.localDescription,
-        senderName: user?.name || (isPolite ? "Patient" : "Doctor"),
+        senderName: userName || (isPolite ? "Patient" : "Doctor"),
       });
     } catch (err) {
       console.warn("initiateOffer error:", err.message);
     } finally {
       makingOffer.current = false;
     }
-  }, [roomId, user?.name, isPolite]);
+  }, [roomId, userName, isPolite]);
 
   // ─── 1. LOCAL MEDIA ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -199,7 +206,9 @@ export default function useWebRTC(roomId, user) {
           if (camPerm.state === "denied") {
             errorType = "denied";
           }
-        } catch {}
+        } catch {
+          // Permissions API can't query "camera" in some browsers; fall through to getUserMedia.
+        }
       }
 
       if (errorType !== "denied" && navigator.mediaDevices?.getUserMedia) {
@@ -271,7 +280,9 @@ export default function useWebRTC(roomId, user) {
             try {
               pc.addTrack(track, stream);
               added = true;
-            } catch {}
+            } catch {
+              // Track already attached to this connection.
+            }
           }
         });
         // Trigger negotiation if new tracks were added. Only the impolite
@@ -349,7 +360,11 @@ export default function useWebRTC(roomId, user) {
     // Attach local tracks if media is already ready
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
-        try { pc.addTrack(track, localStreamRef.current); } catch {}
+        try {
+          pc.addTrack(track, localStreamRef.current);
+        } catch {
+          // Track already attached to this connection.
+        }
       });
     }
 

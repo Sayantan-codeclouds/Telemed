@@ -40,7 +40,7 @@ const CATEGORIES = [
 /**
  * Detect card network from digits
  */
-export const detectCardNetwork = (num) => {
+const detectCardNetwork = (num) => {
   const clean = String(num || "").replace(/\D/g, "");
   if (/^4/.test(clean)) {
     return {

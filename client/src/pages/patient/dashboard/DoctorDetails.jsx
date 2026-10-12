@@ -42,7 +42,7 @@ const SYMPTOM_PRESETS = [
   "Second Medical Opinion",
 ];
 
-export const detectCardNetwork = (num) => {
+const detectCardNetwork = (num) => {
   const clean = String(num || "").replace(/\D/g, "");
   if (/^4/.test(clean)) {
     return {

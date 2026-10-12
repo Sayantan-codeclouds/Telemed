@@ -10,6 +10,7 @@ import {
   getPatientReportsForDoctor,
   getSingleLabReport,
   deleteMyLabReport,
+  streamLabReportFile,
 } from "./labReport.controller.js";
 
 import { authenticatePatient } from "../patients/patient.middleware.js";
@@ -88,6 +89,9 @@ router.get(
 // =====================================
 
 // Get single lab report details
+// Signed, expiring link issued in a report's fileUrl (no auth header needed).
+router.get("/file/:token", streamLabReportFile);
+
 router.get("/:id", authenticateDoctorOrPatient, getSingleLabReport);
 
 export default router;

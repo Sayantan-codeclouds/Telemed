@@ -65,7 +65,7 @@ export const getGiftCardsService = async (query = {}) => {
               notes: card?.gift_card_notes || "",
               vrioRawResponse: card,
             },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: "after" }
           ).catch(() => {});
         }
       }

@@ -21,8 +21,10 @@ export const createLabReport = async (patientId, file, data) => {
 
   // Prefer permanent cloud storage: lab reports are medical records and must
   // survive deploys, unlike the server's ephemeral local disk.
+  // Stored as a private ("authenticated") asset: only the API can fetch it.
   const cloudUrl = await uploadToCloud(file.path, "lab-reports", {
     mimetype: file.mimetype,
+    deliveryType: "authenticated",
   });
   const storedFileRef = cloudUrl || path.basename(file.path);
 
