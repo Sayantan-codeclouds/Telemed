@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "migrate:profile-images": "node scripts/migrate-profile-image-filenames.js",
     "seed:admin": "node scripts/seed-admin.js",
-    "seed:data": "node scripts/seed-demo-data.js"
+    "seed:data": "node scripts/seed-demo-data.js",
+    "backfill:consultation-refunds": "node scripts/backfill-consultation-refunds.js"
   },
   "keywords": [],
   "author": "",

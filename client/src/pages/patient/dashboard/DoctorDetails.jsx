@@ -423,16 +423,42 @@ export default function DoctorDetails() {
     return reviewsData.reviews.filter((r) => Math.round(r.rating) === Number(filterStar));
   }, [reviewsData, filterStar]);
 
-  const patient = JSON.parse(localStorage.getItem("patient") || "{}");
-  const currentPatientId = patient?._id || patient?.id;
+  // The patient's own reviews and appointments (shared caches with the
+  // Appointments page). Anonymous reviews carry no reviewer id in the public
+  // list, so "my review" must come from the patient's own list.
+  const { data: myReviews = [], refetch: fetchMyReviews } = useQuery({
+    queryKey: ["patient-my-reviews"],
+    queryFn: async () => (await api.get("/reviews/my-reviews")).data?.data || [],
+  });
+  const { data: myAppointments = [] } = useQuery({
+    queryKey: ["patient-appointments"],
+    queryFn: async () => (await api.get("/appointments/patient")).data?.data || [],
+  });
 
-  const userReview = useMemo(() => {
-    if (!currentPatientId || !reviewsData?.reviews) return null;
-    return reviewsData.reviews.find(
-      (r) =>
-        String(r.patient?._id || r.patient) === String(currentPatientId)
-    );
-  }, [reviewsData, currentPatientId]);
+  const userReview = useMemo(
+    () => myReviews.find((r) => String(r.doctor?._id || r.doctor) === String(id)) || null,
+    [myReviews, id]
+  );
+
+  // Reviews are limited to patients who completed a consultation with this doctor.
+  const canReview = useMemo(
+    () =>
+      Boolean(userReview) ||
+      myAppointments.some(
+        (a) => String(a.doctor?._id || a.doctor) === String(id) && a.status === "COMPLETED"
+      ),
+    [userReview, myAppointments, id]
+  );
+
+  const openReviewModal = () => {
+    if (!canReview) {
+      toast.info(
+        `You can review Dr. ${doctor?.lastName || doctor?.firstName || "this doctor"} after completing a consultation with them.`
+      );
+      return;
+    }
+    setReviewModalOpen(true);
+  };
 
   if (loading) {
     return (
@@ -508,7 +534,7 @@ export default function DoctorDetails() {
                     {doctor.specialization || "General Physician"}
                   </Badge>
                   <button
-                    onClick={() => setReviewModalOpen(true)}
+                    onClick={openReviewModal}
                     className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-xl border transition cursor-pointer ${
                       userReview
                         ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
@@ -1214,7 +1240,7 @@ export default function DoctorDetails() {
           </div>
 
           <Button
-            onClick={() => setReviewModalOpen(true)}
+            onClick={openReviewModal}
             className={`font-bold rounded-2xl h-11 px-5 text-xs shadow-md gap-2 self-start sm:self-auto cursor-pointer ${
               userReview
                 ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20"
@@ -1362,7 +1388,7 @@ export default function DoctorDetails() {
               </div>
               <Button
                 size="sm"
-                onClick={() => setReviewModalOpen(true)}
+                onClick={openReviewModal}
                 className="bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-xl text-xs shrink-0 cursor-pointer shadow-2xs"
               >
                 ✏️ Edit Your Review
@@ -1398,7 +1424,7 @@ export default function DoctorDetails() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setReviewModalOpen(true)}
+              onClick={openReviewModal}
               className={`rounded-xl text-xs font-bold gap-1 cursor-pointer ${
                 userReview
                   ? "border-emerald-300 text-emerald-800 bg-emerald-50/50 hover:bg-emerald-100"
@@ -1432,7 +1458,7 @@ export default function DoctorDetails() {
                 </p>
               </div>
               <Button
-                onClick={() => setReviewModalOpen(true)}
+                onClick={openReviewModal}
                 className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs mt-2 gap-1.5"
               >
                 <Star className="w-3.5 h-3.5 fill-slate-950 text-slate-950" /> Be First to Review
@@ -1548,6 +1574,7 @@ export default function DoctorDetails() {
         onSuccess={() => {
           fetchDoctorDetails();
           fetchReviews();
+          fetchMyReviews();
         }}
       />
 
