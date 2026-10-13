@@ -13,6 +13,7 @@ import {
   Trash2,
   X,
   Star,
+  LifeBuoy,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/api/axios";
@@ -177,6 +178,8 @@ export default function NotificationBell({ role = "patient" }) {
         return <BadgeCheck className="w-4 h-4 text-emerald-500" />;
       case "DOCTOR_REVIEW":
         return <Star className="w-4 h-4 text-amber-500 fill-amber-400" />;
+      case "SUPPORT":
+        return <LifeBuoy className="w-4 h-4 text-indigo-500" />;
       default:
         return <AlertCircle className="w-4 h-4 text-slate-400" />;
     }
@@ -192,6 +195,7 @@ export default function NotificationBell({ role = "patient" }) {
       case "RECHECKUP_REMINDER":return "bg-pink-50";
       case "DOCTOR_APPROVAL":   return "bg-emerald-50";
       case "DOCTOR_REVIEW":     return "bg-amber-50";
+      case "SUPPORT":           return "bg-indigo-50";
       default:                  return "bg-slate-100";
     }
   };

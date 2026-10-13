@@ -19,6 +19,7 @@ import {
 } from "../shared/utils/fileUrl.js";
 import { uploadToCloud } from "../shared/utils/cloudStorage.js";
 import { sendAccountSetupEmail } from "../mail/mail.service.js";
+import { assertNotPastDate, flagConsultationRefund } from "../appointments/appointment.service.js";
 import { generateTotpSecret, verifyTotpCode, buildOtpAuthUrl } from "../shared/utils/totp.js";
 import crypto from "crypto";
 import hashToken from "../shared/utils/hashToken.js";
@@ -346,6 +347,7 @@ const cancelUpcomingAppointments = async (filter, notify) => {
   for (const appointment of upcoming) {
     appointment.status = "CANCELLED";
     await appointment.save();
+    await flagConsultationRefund(appointment._id);
 
     const date = new Date(appointment.appointmentDate).toLocaleDateString("en-US", {
       month: "short",
@@ -578,6 +580,11 @@ export const deleteAppointmentService = async (appointmentId) => {
   const appointment = await Appointment.findById(appointmentId);
   if (!appointment) throw AppError.notFound("Appointment not found.");
 
+  // The paid order is kept; flag it for a refund unless the visit happened.
+  if (appointment.status !== "COMPLETED") {
+    await flagConsultationRefund(appointment._id);
+  }
+
   await Promise.all([
     Appointment.findByIdAndDelete(appointmentId),
     Prescription.deleteMany({ appointment: appointmentId }),
@@ -611,6 +618,12 @@ export const rescheduleAppointmentByAdminService = async (
   // completing/cancelling has its own flow (and affects doctor earnings).
   if (newStatus && !["PENDING", "CONFIRMED"].includes(newStatus)) {
     throw AppError.badRequest("New status must be PENDING or CONFIRMED.");
+  }
+
+  try {
+    assertNotPastDate(newDate);
+  } catch (err) {
+    throw AppError.badRequest(err.message);
   }
 
   const doctor = await Doctor.findById(appointment.doctor);

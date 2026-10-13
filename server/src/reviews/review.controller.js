@@ -59,8 +59,17 @@ export const replyToReview = asyncHandler(async (req, res) => {
 });
 
 export const deleteReview = asyncHandler(async (req, res) => {
-  const userId = req.patient?._id || req.admin?._id || req.user?._id;
-  const userRole = req.patient ? "PATIENT" : req.admin ? "ADMIN" : "USER";
+  // Only the patient who wrote the review, or a SuperAdmin/Admin moderating,
+  // may delete it. Doctors must never remove reviews (theirs or anyone's).
+  let userRole = null;
+  if (req.patient) userRole = "PATIENT";
+  else if (req.admin && ["SuperAdmin", "Admin"].includes(req.admin.role)) userRole = "ADMIN";
+
+  if (!userRole) {
+    return res.status(403).json({ success: false, message: "You are not allowed to delete reviews." });
+  }
+
+  const userId = req.patient?._id || req.admin?._id;
   const result = await deleteReviewService(req.params.reviewId, userId, userRole);
   res.status(200).json({
     success: true,

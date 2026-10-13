@@ -121,9 +121,10 @@ const doctorSchema = new mongoose.Schema(
       max: 100,
     },
 
+    // 0 with totalReviews 0 means "not rated yet" (shown as "New").
     averageRating: {
       type: Number,
-      default: 5.0,
+      default: 0,
       min: 0,
       max: 5,
     },

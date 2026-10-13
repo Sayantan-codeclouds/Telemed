@@ -34,6 +34,51 @@ export function getDayOfWeek(dateInput) {
   });
 }
 
+/**
+ * Rejects dates before "today". One day of slack covers patients whose local
+ * date is behind UTC (bookings store the picked date as UTC midnight).
+ */
+export const assertNotPastDate = (dateInput) => {
+  const match = typeof dateInput === "string" && dateInput.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const day = match
+    ? Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(dateInput).getTime();
+  if (Number.isNaN(day)) {
+    throw new Error("Please choose a valid appointment date.");
+  }
+  const now = new Date();
+  const yesterdayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - 24 * 60 * 60 * 1000;
+  if (day < yesterdayUtc) {
+    throw new Error("Appointments can't be booked or moved to a date in the past.");
+  }
+};
+
+/**
+ * A cancelled or rejected consultation was paid for up front: flag its order
+ * so it shows up in the admin refund flow ("Refund pending").
+ */
+export const flagConsultationRefund = async (appointmentId) => {
+  await Order.updateMany(
+    { appointment: appointmentId, paymentStatus: "PAID" },
+    { $set: { status: "CANCELLED", paymentStatus: "REFUND_PENDING" } }
+  ).catch((err) => console.error("[Appointments] Could not flag consultation refund:", err?.message || err));
+};
+
+// Status changes a doctor may make from the appointments screen. COMPLETED is
+// only reached by ending the consultation; final states never change.
+const DOCTOR_STATUS_TRANSITIONS = {
+  PENDING: ["CONFIRMED", "REJECTED", "CANCELLED"],
+  CONFIRMED: ["IN_PROGRESS", "CANCELLED", "NO_SHOW"],
+  IN_PROGRESS: [],
+  COMPLETED: [],
+  CANCELLED: [],
+  REJECTED: [],
+  NO_SHOW: [],
+};
+
+// Statuses in which the patient may still cancel or reschedule.
+const PATIENT_CHANGEABLE_STATUSES = ["PENDING", "CONFIRMED", "IN_PROGRESS"];
+
 export const createAppointment = async (
   patientId,
   data
@@ -65,6 +110,8 @@ export const createAppointment = async (
       "Doctor is not available."
     );
   }
+
+  assertNotPastDate(data.appointmentDate);
 
   // ==========================
   // Check Doctor Availability
@@ -450,8 +497,19 @@ export const updateAppointmentStatus =
 
     }
 
+  const allowed = DOCTOR_STATUS_TRANSITIONS[appointment.status] || [];
+  if (status !== appointment.status && !allowed.includes(status)) {
+    throw new Error(
+      `An appointment that is ${appointment.status.replace("_", " ").toLowerCase()} can't be changed to ${status.replace("_", " ").toLowerCase()}.`
+    );
+  }
+
   appointment.status = status;
   await appointment.save();
+
+  if (status === "CANCELLED" || status === "REJECTED") {
+    await flagConsultationRefund(appointment._id);
+  }
 
   // Populate to get patient and doctor details for notifications
   const populated = await appointment.populate([
@@ -510,6 +568,15 @@ export const endConsultationService = async (appointmentId, userId, userType) =>
     throw new Error("Unauthorized to end this consultation.");
   }
 
+  // Both sides may click "End"; the second call is a no-op.
+  if (appointment.status === "COMPLETED") {
+    return appointment;
+  }
+
+  if (appointment.status !== "CONFIRMED" && appointment.status !== "IN_PROGRESS") {
+    throw new Error(`This consultation can't be ended because it is ${appointment.status.replace("_", " ").toLowerCase()}.`);
+  }
+
   appointment.status = "COMPLETED";
   await appointment.save();
 
@@ -554,12 +621,30 @@ export const cancelPatientAppointment = async (appointmentId, patientId) => {
     throw new Error("Appointment not found or unauthorized.");
   }
 
-  if (appointment.status === "COMPLETED") {
-    throw new Error("Completed appointments cannot be cancelled.");
+  if (!PATIENT_CHANGEABLE_STATUSES.includes(appointment.status)) {
+    throw new Error(`This appointment is already ${appointment.status.replace("_", " ").toLowerCase()} and can't be cancelled.`);
   }
 
   appointment.status = "CANCELLED";
   await appointment.save();
+  await flagConsultationRefund(appointment._id);
+
+  // Let the doctor know the slot is free again.
+  const patient = await Patient.findById(patientId).select("firstName lastName");
+  const apptDate = new Date(appointment.appointmentDate).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  await createNotificationService({
+    recipient: appointment.doctor,
+    recipientModel: "Doctor",
+    title: "❌ Appointment Cancelled by Patient",
+    message: `${patient ? `${patient.firstName} ${patient.lastName}` : "The patient"} cancelled the appointment on ${apptDate} at ${appointment.slot?.start}.`,
+    type: "APPOINTMENT",
+    link: "/doctor/appointments",
+  }).catch(() => {});
 
   return appointment;
 };
@@ -582,13 +667,11 @@ export const reschedulePatientAppointment = async (
     throw new Error("Appointment not found or unauthorized.");
   }
 
-  if (appointment.status === "COMPLETED") {
-    throw new Error("Completed appointments cannot be rescheduled.");
+  if (!PATIENT_CHANGEABLE_STATUSES.includes(appointment.status)) {
+    throw new Error(`This appointment is ${appointment.status.replace("_", " ").toLowerCase()} and can't be rescheduled.`);
   }
 
-  if (appointment.status === "CANCELLED") {
-    throw new Error("Cancelled appointments cannot be rescheduled.");
-  }
+  assertNotPastDate(newDate);
 
   const doctor = await Doctor.findById(appointment.doctor);
   if (!doctor || doctor.status !== "ACTIVE") {

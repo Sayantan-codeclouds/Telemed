@@ -25,7 +25,7 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["APPOINTMENT", "PRESCRIPTION", "PHARMACY", "CHAT", "RECHECKUP_REMINDER", "DOCTOR_APPROVAL", "ORDER", "DOCTOR_REVIEW", "SYSTEM"],
+      enum: ["APPOINTMENT", "PRESCRIPTION", "PHARMACY", "CHAT", "RECHECKUP_REMINDER", "DOCTOR_APPROVAL", "ORDER", "DOCTOR_REVIEW", "SUPPORT", "SYSTEM"],
       default: "SYSTEM",
     },
     link: {

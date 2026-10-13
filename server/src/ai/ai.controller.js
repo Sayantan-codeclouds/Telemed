@@ -11,17 +11,56 @@ import {
   analyzeLabReportService,
 } from "./ai.service.js";
 
-export const getHealthAdvice = asyncHandler(async (req, res) => {
-  const { message, history, patientContext } = req.body;
+// --- Input clean-up: every AI call is billed per token, and bad types must
+// give a 400, not crash the prompt builders. ---
+const MAX_MESSAGE_CHARS = 4000;
+const MAX_REPORT_CHARS = 50000; // the service trims further before prompting
+const MAX_HISTORY_TURNS = 20;
 
-  if (!message || !message.trim()) {
+const cleanText = (value, max) => (typeof value === "string" ? value.trim().slice(0, max) : "");
+
+const cleanHistory = (history) =>
+  (Array.isArray(history) ? history : [])
+    .slice(-MAX_HISTORY_TURNS)
+    .filter((turn) => turn && typeof turn === "object")
+    .map((turn) => {
+      // AI turns may be objects ({ reply, directAnswer, ... }); keep only text.
+      const raw =
+        typeof turn.text === "string"
+          ? turn.text
+          : [turn.text?.reply, turn.text?.directAnswer].find((value) => typeof value === "string") || "";
+      return { sender: turn.sender === "user" ? "user" : "ai", text: raw.slice(0, MAX_MESSAGE_CHARS) };
+    })
+    .filter((turn) => turn.text);
+
+const cleanStringList = (value) =>
+  (Array.isArray(value) ? value : []).filter((item) => typeof item === "string").map((item) => item.slice(0, 100)).slice(0, 30);
+
+const cleanPatientContext = (context) => {
+  const source = context && typeof context === "object" ? context : {};
+  return {
+    age: typeof source.age === "number" || typeof source.age === "string" ? String(source.age).slice(0, 10) : undefined,
+    gender: cleanText(source.gender, 30) || undefined,
+    allergies: cleanStringList(source.allergies),
+    medicalConditions: cleanStringList(source.medicalConditions),
+  };
+};
+
+export const getHealthAdvice = asyncHandler(async (req, res) => {
+  const message = cleanText(req.body?.message, MAX_MESSAGE_CHARS);
+
+  if (!message) {
     return res.status(400).json({
       success: false,
       message: "Message is required.",
     });
   }
 
-  const result = await getHealthAdviceService({ message, history, patientContext });
+  const result = await getHealthAdviceService({
+    message,
+    history: cleanHistory(req.body?.history),
+    patientContext: cleanPatientContext(req.body?.patientContext),
+  });
   res.status(200).json({
     success: true,
     data: result,
@@ -29,7 +68,14 @@ export const getHealthAdvice = asyncHandler(async (req, res) => {
 });
 
 export const receptionistIntake = asyncHandler(async (req, res) => {
-  const result = await runReceptionistIntake(req.body);
+  const body = req.body || {};
+  const result = await runReceptionistIntake({
+    symptoms: cleanText(body.symptoms, MAX_MESSAGE_CHARS),
+    chiefComplaint: cleanText(body.chiefComplaint, 500),
+    age: typeof body.age === "number" || typeof body.age === "string" ? String(body.age).slice(0, 10) : "",
+    gender: cleanText(body.gender, 30),
+    duration: cleanText(body.duration, 100),
+  });
   res.status(200).json({
     success: true,
     data: result,
@@ -92,7 +138,8 @@ export const readPrescriptionToCart = asyncHandler(async (req, res) => {
 });
 
 export const analyzeLabReport = asyncHandler(async (req, res) => {
-  const { reportText, message, history, mode } = req.body;
+  const reportText = cleanText(req.body?.reportText, MAX_REPORT_CHARS);
+  const message = cleanText(req.body?.message, MAX_MESSAGE_CHARS);
 
   if (!reportText && !message) {
     return res.status(400).json({
@@ -101,7 +148,12 @@ export const analyzeLabReport = asyncHandler(async (req, res) => {
     });
   }
 
-  const result = await analyzeLabReportService({ reportText, message, history, mode });
+  const result = await analyzeLabReportService({
+    reportText,
+    message,
+    history: cleanHistory(req.body?.history),
+    mode: req.body?.mode === "analyze" ? "analyze" : "chat",
+  });
   res.status(200).json({
     success: true,
     data: result,

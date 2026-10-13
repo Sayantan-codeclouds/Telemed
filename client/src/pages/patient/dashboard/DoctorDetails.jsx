@@ -30,6 +30,7 @@ import api from "@/api/axios";
 import { getProfileImageUrl, handleAvatarError } from "@/utils/imageUrl";
 import DoctorReviewModal from "@/components/patient/DoctorReviewModal";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { removePastSlots } from "@/utils/slots";
 
 const SYMPTOM_PRESETS = [
   "Routine Health Checkup",
@@ -134,7 +135,7 @@ export default function DoctorDetails() {
   });
 
   const DEFAULT_REVIEWS_DATA = {
-    averageRating: 5.0,
+    averageRating: 0,
     totalReviews: 0,
     ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
     topTags: [],
@@ -244,7 +245,8 @@ export default function DoctorDetails() {
     queryKey: ["doctor-available-slots", id, selectedDate],
     queryFn: async () => {
       const res = await api.get(`/doctors/${id}/available-slots?date=${selectedDate}`);
-      return res.data?.data || [];
+      // Today's slots that have already started can't be booked.
+      return removePastSlots(selectedDate, res.data?.data || []);
     },
     enabled: !!id && !!selectedDate,
     meta: { onError: (err) => console.error("Failed to fetch slots:", err) },
@@ -515,7 +517,7 @@ export default function DoctorDetails() {
                     title={userReview ? "Click to edit your review" : "Click to write a review"}
                   >
                     <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                    <span>{reviewsData?.averageRating ? reviewsData.averageRating.toFixed(1) : "5.0"}</span>
+                    <span>{reviewsData?.totalReviews > 0 ? reviewsData.averageRating.toFixed(1) : "New"}</span>
                     <span className="text-slate-400 font-normal">
                       ({reviewsData?.totalReviews || 0} reviews)
                     </span>
@@ -1241,9 +1243,11 @@ export default function DoctorDetails() {
               </span>
               <div className="flex items-baseline justify-center sm:justify-start gap-2">
                 <span className="text-4xl sm:text-5xl font-black text-slate-900">
-                  {reviewsData?.averageRating ? reviewsData.averageRating.toFixed(1) : "5.0"}
+                  {reviewsData?.totalReviews > 0 ? reviewsData.averageRating.toFixed(1) : "New"}
                 </span>
-                <span className="text-slate-400 font-bold text-base">/ 5.0</span>
+                {reviewsData?.totalReviews > 0 && (
+                  <span className="text-slate-400 font-bold text-base">/ 5.0</span>
+                )}
               </div>
 
               <div className="flex items-center justify-center sm:justify-start gap-1 text-amber-400">
@@ -1251,7 +1255,7 @@ export default function DoctorDetails() {
                   <Star
                     key={star}
                     className={`w-4 h-4 ${
-                      star <= Math.round(reviewsData?.averageRating || 5)
+                      star <= Math.round(reviewsData?.totalReviews > 0 ? reviewsData.averageRating : 0)
                         ? "fill-amber-400 text-amber-400"
                         : "text-slate-200"
                     }`}

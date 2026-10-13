@@ -129,7 +129,8 @@ export default function DoctorProfile() {
     .filter(Boolean)
     .join(", ");
 
-  const avgRating = doctor.averageRating ? doctor.averageRating.toFixed(1) : "5.0";
+  const hasRatings = (doctor.totalReviews || reviews.length) > 0;
+  const avgRating = hasRatings ? Number(doctor.averageRating || 0).toFixed(1) : "New";
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-16">
@@ -497,7 +498,9 @@ export default function DoctorProfile() {
 
           <div className="inline-flex items-center gap-2 bg-amber-50 px-3.5 py-1.5 rounded-2xl border border-amber-200 self-start sm:self-auto">
             <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
-            <span className="text-sm font-black text-amber-900">{avgRating} Average Rating</span>
+            <span className="text-sm font-black text-amber-900">
+              {hasRatings ? `${avgRating} Average Rating` : "No ratings yet"}
+            </span>
           </div>
         </div>
 

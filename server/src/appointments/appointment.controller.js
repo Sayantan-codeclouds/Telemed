@@ -1,4 +1,10 @@
 import { assertAppointmentParticipant } from "../shared/middleware/authenticateDoctorOrPatient.js";
+
+// Zod errors carry their details in `issues`; their `message` is a JSON dump.
+const errorMessage = (error) =>
+  Array.isArray(error?.issues) && error.issues.length > 0
+    ? error.issues.map((issue) => issue.message).join(", ")
+    : error?.message || "Something went wrong.";
 import {
   createAppointment,
   getAppointmentById,
@@ -42,7 +48,7 @@ export const bookAppointment = async (req, res) => {
   } catch (error) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message: errorMessage(error),
     });
   }
 };
@@ -66,7 +72,7 @@ export const getAppointment = async (req, res) => {
   } catch (error) {
     return res.status(error.statusCode || 404).json({
       success: false,
-      message: error.message,
+      message: errorMessage(error),
     });
   }
 };
@@ -92,7 +98,7 @@ export const getMyAppointments = async (
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: errorMessage(error),
     });
   }
 };
@@ -112,7 +118,7 @@ export const cancelMyAppointment = async (req, res) => {
   } catch (error) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message: errorMessage(error),
     });
   }
 };
@@ -134,7 +140,7 @@ export const rescheduleMyAppointment = async (req, res) => {
   } catch (error) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message: errorMessage(error),
     });
   }
 };
@@ -158,7 +164,7 @@ export const getDoctorAppointmentList =
     } catch (error) {
       return res.status(400).json({
         success: false,
-        message: error.message,
+        message: errorMessage(error),
       });
     }
   };
@@ -190,7 +196,7 @@ export const changeAppointmentStatus =
     } catch (error) {
       return res.status(400).json({
         success: false,
-        message: error.message,
+        message: errorMessage(error),
       });
     }
   };
@@ -225,7 +231,7 @@ export const endConsultation = async (req, res) => {
   } catch (error) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message: errorMessage(error),
     });
   }
 };
@@ -259,7 +265,7 @@ export const saveDoctorNotes = async (
   } catch (error) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message: errorMessage(error),
     });
   }
 };
@@ -291,7 +297,7 @@ export const savePrescription =
     } catch (error) {
       return res.status(400).json({
         success: false,
-        message: error.message,
+        message: errorMessage(error),
       });
     }
   };
@@ -325,7 +331,7 @@ export const saveAISummary = async (
   } catch (error) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message: errorMessage(error),
     });
   }
 };

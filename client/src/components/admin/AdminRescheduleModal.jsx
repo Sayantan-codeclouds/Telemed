@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import adminApi from "@/api/adminApi";
 import { getProfileImageUrl } from "@/utils/imageUrl";
+import { removePastSlots } from "@/utils/slots";
 
 export default function AdminRescheduleModal({
   appointment,
@@ -62,7 +63,8 @@ export default function AdminRescheduleModal({
     queryKey: ["doctor-available-slots", doctorId, selectedDate],
     queryFn: async () => {
       const res = await adminApi.get(`/doctors/${doctorId}/available-slots?date=${selectedDate}`);
-      return res.data?.data || [];
+      // Today's slots that have already started can't be chosen.
+      return removePastSlots(selectedDate, res.data?.data || []);
     },
     enabled: isOpen && !!doctorId && !!selectedDate,
     meta: {

@@ -13,7 +13,8 @@ export const updateDoctorReviewStats = async (doctorId) => {
   const reviews = await Review.find({ doctor: doctorId });
   const totalReviews = reviews.length;
 
-  let averageRating = 5.0; // default initial display for zero reviews
+  // 0 = not rated yet; the UI shows "New" when totalReviews is 0.
+  let averageRating = 0;
   if (totalReviews > 0) {
     const totalScore = reviews.reduce((sum, r) => sum + r.rating, 0);
     averageRating = Number((totalScore / totalReviews).toFixed(1));
@@ -37,8 +38,9 @@ export const createReviewService = async (patientId, data) => {
     throw AppError.badRequest("Doctor ID is required.");
   }
 
-  if (!rating || rating < 1 || rating > 5) {
-    throw AppError.badRequest("Rating must be between 1 and 5 stars.");
+  const ratingValue = Number(rating);
+  if (!Number.isInteger(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+    throw AppError.badRequest("Rating must be a whole number of stars from 1 to 5.");
   }
 
   const reviewText = review ? review.trim() : "";
@@ -57,7 +59,8 @@ export const createReviewService = async (patientId, data) => {
     throw AppError.notFound("Patient not found.");
   }
 
-  // If appointment provided, verify it belongs to patient and doctor
+  // Only patients who actually completed a consultation with this doctor may
+  // review them (prevents fake reviews). A given appointment must be that one.
   if (appointmentId) {
     const appt = await Appointment.findOne({
       _id: appointmentId,
@@ -66,6 +69,16 @@ export const createReviewService = async (patientId, data) => {
     });
     if (!appt) {
       throw AppError.badRequest("Invalid appointment reference for this review.");
+    }
+    if (appt.status !== "COMPLETED") {
+      throw AppError.badRequest("You can review this consultation once it has been completed.");
+    }
+  } else {
+    const hasConsulted = await Appointment.exists({ patient: patientId, doctor: doctorId, status: "COMPLETED" });
+    if (!hasConsulted) {
+      throw AppError.badRequest(
+        `You can review Dr. ${doctor.lastName || doctor.firstName} after completing a consultation with them.`
+      );
     }
   }
 
@@ -81,7 +94,7 @@ export const createReviewService = async (patientId, data) => {
       });
 
   if (existing) {
-    existing.rating = Number(rating);
+    existing.rating = ratingValue;
     existing.review = reviewText;
     existing.tags = Array.isArray(tags) ? tags : [];
     existing.isAnonymous = Boolean(isAnonymous);
@@ -101,7 +114,7 @@ export const createReviewService = async (patientId, data) => {
     doctor: doctorId,
     patient: patientId,
     appointment: appointmentId || null,
-    rating: Number(rating),
+    rating: ratingValue,
     review: reviewText,
     tags: Array.isArray(tags) ? tags : [],
     isAnonymous: Boolean(isAnonymous),
@@ -115,7 +128,7 @@ export const createReviewService = async (patientId, data) => {
     ? "A patient"
     : `${patient.firstName} ${patient.lastName}`;
 
-  const starEmoji = "⭐".repeat(Math.round(rating));
+  const starEmoji = "⭐".repeat(ratingValue);
   const commentSnippet = reviewText
     ? `: "${reviewText.slice(0, 80)}${reviewText.length > 80 ? "..." : ""}"`
     : "";
@@ -123,8 +136,8 @@ export const createReviewService = async (patientId, data) => {
   await createNotificationService({
     recipient: doctor._id,
     recipientModel: "Doctor",
-    title: `🌟 New ${rating}-Star Review Received!`,
-    message: `${reviewerDisplayName} left a ${rating}-star review ${starEmoji}${commentSnippet}`,
+    title: `🌟 New ${ratingValue}-Star Review Received!`,
+    message: `${reviewerDisplayName} left a ${ratingValue}-star review ${starEmoji}${commentSnippet}`,
     type: "DOCTOR_REVIEW",
     link: "/doctor/profile",
   }).catch(() => {});
@@ -138,6 +151,19 @@ export const createReviewService = async (patientId, data) => {
 };
 
 /**
+ * Replaces the reviewer of an anonymous review with a placeholder (no id,
+ * name or photo); formats the profile image of named reviewers.
+ */
+const maskAnonymousReviewer = (review) => {
+  if (review.isAnonymous) {
+    review.patient = { firstName: "Verified", lastName: "Patient", profileImage: "" };
+  } else if (review.patient) {
+    review.patient = formatProfileImage(review.patient);
+  }
+  return review;
+};
+
+/**
  * Get reviews for a specific doctor with aggregated summary
  */
 export const getDoctorReviewsService = async (doctorId) => {
@@ -146,7 +172,7 @@ export const getDoctorReviewsService = async (doctorId) => {
     .sort({ createdAt: -1 });
 
   const totalReviews = reviews.length;
-  let averageRating = 5.0;
+  let averageRating = 0; // not rated yet
   const ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   const tagCounts = {};
 
@@ -168,17 +194,7 @@ export const getDoctorReviewsService = async (doctorId) => {
   // Format anonymous reviews to mask patient identity and format profile images
   const sanitizedReviews = reviews.map((r) => {
     const obj = r.toObject ? r.toObject() : r;
-    if (obj.isAnonymous && obj.patient) {
-      obj.patient = {
-        _id: obj.patient._id,
-        firstName: "Verified",
-        lastName: "Patient",
-        profileImage: "",
-      };
-    } else if (obj.patient) {
-      obj.patient = formatProfileImage(obj.patient);
-    }
-    return obj;
+    return maskAnonymousReviewer(obj);
   });
 
   return {
@@ -220,11 +236,11 @@ export const getDoctorReceivedReviewsService = async (doctorId) => {
     .populate("appointment", "appointmentDate slot reason")
     .sort({ createdAt: -1 });
 
+  // Anonymous means anonymous to the doctor too: hide who wrote it and which
+  // visit it was about (the appointment would identify the patient).
   return reviews.map((r) => {
-    const obj = r.toObject ? r.toObject() : r;
-    if (obj.patient) {
-      obj.patient = formatProfileImage(obj.patient);
-    }
+    const obj = maskAnonymousReviewer(r.toObject ? r.toObject() : r);
+    if (obj.isAnonymous) obj.appointment = null;
     return obj;
   });
 };
@@ -262,16 +278,21 @@ export const replyToReviewService = async (doctorId, reviewId, replyText) => {
     link: `/patient/doctors/${doctorId}`,
   }).catch(() => {});
 
-  return review.populate([
+  const populated = await review.populate([
     { path: "patient", select: "firstName lastName profileImage" },
     { path: "doctor", select: "firstName lastName specialization profileImage" },
   ]);
+  return maskAnonymousReviewer(populated.toObject());
 };
 
 /**
  * Delete a review (by author patient or admin)
  */
 export const deleteReviewService = async (reviewId, userId, userRole) => {
+  if (userRole !== "PATIENT" && userRole !== "ADMIN") {
+    throw AppError.forbidden("You are not allowed to delete reviews.");
+  }
+
   const query = { _id: reviewId };
   if (userRole === "PATIENT") {
     query.patient = userId;

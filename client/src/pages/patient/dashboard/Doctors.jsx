@@ -139,8 +139,9 @@ export default function Doctors() {
     result.sort((a, b) => {
       const nameA = `${a.firstName || ""} ${a.lastName || ""}`.trim().toLowerCase();
       const nameB = `${b.firstName || ""} ${b.lastName || ""}`.trim().toLowerCase();
-      const ratingA = Number(a.averageRating ?? a.rating ?? 5.0);
-      const ratingB = Number(b.averageRating ?? b.rating ?? 5.0);
+      // Unrated doctors (no reviews yet) sort after rated ones.
+      const ratingA = a.totalReviews > 0 ? Number(a.averageRating) : -1;
+      const ratingB = b.totalReviews > 0 ? Number(b.averageRating) : -1;
       const priceA = Number(a.consultationFee ?? 500);
       const priceB = Number(b.consultationFee ?? 500);
 
@@ -432,7 +433,7 @@ export default function Doctors() {
                       </Badge>
                       <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200/60 shrink-0">
                         <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                        {doctor.averageRating ? Number(doctor.averageRating).toFixed(1) : "5.0"}
+                        {doctor.totalReviews > 0 ? Number(doctor.averageRating).toFixed(1) : "New"}
                         <span className="text-[10px] font-normal text-slate-400">
                           ({doctor.totalReviews || 0})
                         </span>
