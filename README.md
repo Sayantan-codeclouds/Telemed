@@ -104,6 +104,15 @@ npm run dev
 
 The web application will be running at `http://localhost:5173`.
 
+### 5. Running the Tests
+
+```bash
+cd server
+npm test
+```
+
+The API test suite (`server/tests/`) runs against a throwaway in-memory MongoDB, so it never touches your real database and does not read `.env`. CRM calls are stubbed and no emails or AI requests are sent. The first run downloads a MongoDB test binary (~60 MB), which is cached afterwards.
+
 ---
 
 ## 📁 Repository Structure
