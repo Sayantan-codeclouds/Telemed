@@ -41,7 +41,8 @@ app.use(
     },
   })
 );
-app.use(express.json());
+// 1 MB: doctor signature / clinic stamp images are sent inline (max ~500 KB each).
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
 

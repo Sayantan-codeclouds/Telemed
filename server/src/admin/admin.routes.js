@@ -24,6 +24,7 @@ import {
   changeDoctorStatus,
   updateDoctorCommission,
   deleteDoctor,
+  reviewDoctorCredentials,
   getAppointments,
   deleteAppointment,
   rescheduleAppointmentByAdmin,
@@ -50,6 +51,7 @@ import {
   updateAdminUserRole,
   updateAdminUserStatus,
   deleteAdminUser,
+  resetAdminUserPassword,
 } from "./admin.controller.js";
 
 const router = express.Router();
@@ -78,6 +80,7 @@ router.post("/users", authorizeRoles("SuperAdmin"), createAdminUser);
 router.patch("/users/:id/role", authorizeRoles("SuperAdmin"), updateAdminUserRole);
 router.patch("/users/:id/status", authorizeRoles("SuperAdmin"), updateAdminUserStatus);
 router.delete("/users/:id", authorizeRoles("SuperAdmin"), deleteAdminUser);
+router.patch("/users/:id/password", authorizeRoles("SuperAdmin"), resetAdminUserPassword);
 
 // Patients
 router.get("/patients", getPatients);
@@ -91,6 +94,7 @@ router.post("/doctors", authorizeRoles("SuperAdmin", "Admin"), createDoctor);
 router.patch("/doctors/:id/status", authorizeRoles("SuperAdmin", "Admin"), changeDoctorStatus);
 router.patch("/doctors/:id/commission", authorizeRoles("SuperAdmin", "Admin"), updateDoctorCommission);
 router.delete("/doctors/:id", authorizeRoles("SuperAdmin"), deleteDoctor);
+router.patch("/doctors/:id/credentials", authorizeRoles("SuperAdmin", "Admin"), reviewDoctorCredentials);
 
 // Appointments
 router.get("/appointments", getAppointments);

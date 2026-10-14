@@ -8,6 +8,9 @@ import {
   sendDoctorResetPasswordEmail,
 } from "../mail/mail.service.js";
 import { formatProfileImage } from "../shared/utils/fileUrl.js";
+import Admin from "../admin/admin.model.js";
+import AppError from "../shared/errors/AppError.js";
+import { createNotificationService } from "../notifications/notification.service.js";
 import hashToken from "../shared/utils/hashToken.js";
 
 export const verifyDoctorEmail = async (token) => {
@@ -126,6 +129,31 @@ export const loginDoctor = async (data) => {
   };
 };
 
+// Fields patients rely on to trust a doctor; changes after approval need review.
+const CREDENTIAL_FIELDS = ["licenseNumber", "qualification", "specialization"];
+
+// Signature / stamp images are stored inline and drawn into prescription PDFs:
+// PNG or JPEG data URLs only, ~500 KB max.
+const MAX_IMAGE_DATA_URL_LENGTH = 700000;
+const assertSignatureImage = (value, label) => {
+  if (value === "" || value === null) return;
+  if (typeof value !== "string" || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(value)) {
+    throw new Error(`${label} must be a PNG or JPEG image.`);
+  }
+  if (value.length > MAX_IMAGE_DATA_URL_LENGTH) {
+    throw new Error(`${label} image is too large (max about 500 KB).`);
+  }
+};
+
+const PRIVATE_DOCTOR_FIELDS = [
+  "password",
+  "verificationToken",
+  "verificationTokenExpires",
+  "resetPasswordToken",
+  "resetPasswordTokenExpires",
+  "payoutSettings",
+];
+
 export const updateDoctorProfile = async (doctorId, data) => {
   const doctor = await Doctor.findById(doctorId);
 
@@ -133,14 +161,54 @@ export const updateDoctorProfile = async (doctorId, data) => {
     throw new Error("Doctor not found.");
   }
 
+  if (data.consultationFee !== undefined && data.consultationFee !== null) {
+    const fee = Number(data.consultationFee);
+    if (!Number.isFinite(fee) || fee < 0 || fee > 100000) {
+      throw new Error("Consultation fee must be a number between 0 and 100,000.");
+    }
+    doctor.consultationFee = Math.round(fee * 100) / 100;
+  }
+  if (data.experience !== undefined && data.experience !== null) {
+    const years = Number(data.experience);
+    if (!Number.isFinite(years) || years < 0 || years > 80) {
+      throw new Error("Experience must be between 0 and 80 years.");
+    }
+    doctor.experience = years;
+  }
+  // Only new images are checked: the form re-sends unchanged (possibly legacy) values.
+  if (data.signature !== undefined && data.signature !== doctor.signature) {
+    assertSignatureImage(data.signature, "Signature");
+  }
+  if (data.clinicStamp !== undefined && data.clinicStamp !== doctor.clinicStamp) {
+    assertSignatureImage(data.clinicStamp, "Clinic stamp");
+  }
+
+  // Credentials: applied directly while the account awaits approval (the
+  // approval reviews them); for an approved doctor they are held for review.
+  const changedCredentials = {};
+  for (const field of CREDENTIAL_FIELDS) {
+    const value = data[field];
+    if (value !== undefined && value !== null && String(value).trim() !== String(doctor[field] || "").trim()) {
+      changedCredentials[field] = String(value).trim();
+    }
+  }
+  let credentialChangePending = false;
+  if (Object.keys(changedCredentials).length > 0) {
+    if (doctor.status === "ACTIVE") {
+      doctor.pendingCredentialChanges = {
+        ...(doctor.pendingCredentialChanges?.toObject?.() || doctor.pendingCredentialChanges || {}),
+        ...changedCredentials,
+        requestedAt: new Date(),
+      };
+      credentialChangePending = true;
+    } else {
+      Object.assign(doctor, changedCredentials);
+    }
+  }
+
   doctor.firstName = data.firstName ?? doctor.firstName;
   doctor.lastName = data.lastName ?? doctor.lastName;
   doctor.phone = data.phone ?? doctor.phone;
-  doctor.specialization = data.specialization ?? doctor.specialization;
-  doctor.qualification = data.qualification ?? doctor.qualification;
-  doctor.experience = data.experience ?? doctor.experience;
-  doctor.licenseNumber = data.licenseNumber ?? doctor.licenseNumber;
-  doctor.consultationFee = data.consultationFee ?? doctor.consultationFee;
   doctor.biography = data.biography ?? doctor.biography;
   doctor.hospital = data.hospital ?? doctor.hospital;
   doctor.languages = data.languages ?? doctor.languages;
@@ -157,7 +225,58 @@ export const updateDoctorProfile = async (doctorId, data) => {
 
   await doctor.save();
 
-  return formatProfileImage(doctor);
+  if (credentialChangePending) {
+    await notifyAdminsOfCredentialChange(doctor).catch(() => {});
+  }
+
+  const result = formatProfileImage(doctor);
+  for (const field of PRIVATE_DOCTOR_FIELDS) delete result[field];
+  return { ...result, credentialChangePending };
+};
+
+const notifyAdminsOfCredentialChange = async (doctor) => {
+  const admins = await Admin.find({ role: { $in: ["SuperAdmin", "Admin"] }, status: "ACTIVE" }).select("_id");
+  await Promise.all(
+    admins.map((admin) =>
+      createNotificationService({
+        recipient: admin._id,
+        recipientModel: "Admin",
+        title: "🩺 Doctor credentials to review",
+        message: `Dr. ${doctor.firstName} ${doctor.lastName} changed their licence/qualification/specialization. Review it in Doctors.`,
+        type: "DOCTOR_APPROVAL",
+        link: "/admin/doctors",
+      }).catch(() => {})
+    )
+  );
+};
+
+/** Admin: apply or discard a doctor's pending credential changes. */
+export const reviewDoctorCredentialChangesService = async (doctorId, approve) => {
+  const doctor = await Doctor.findOne({ _id: doctorId, deletedAt: null });
+  if (!doctor) throw AppError.notFound("Doctor not found.");
+  const pending = doctor.pendingCredentialChanges;
+  if (!pending) throw AppError.badRequest("This doctor has no credential changes waiting for review.");
+
+  if (approve) {
+    for (const field of CREDENTIAL_FIELDS) {
+      if (pending[field] !== undefined && pending[field] !== null) doctor[field] = pending[field];
+    }
+  }
+  doctor.pendingCredentialChanges = null;
+  await doctor.save();
+
+  await createNotificationService({
+    recipient: doctor._id,
+    recipientModel: "Doctor",
+    title: approve ? "✅ Credential update approved" : "❌ Credential update not approved",
+    message: approve
+      ? "Your updated licence/qualification/specialization is now shown on your profile."
+      : "Your licence/qualification/specialization change was not approved. Contact support for details.",
+    type: "DOCTOR_APPROVAL",
+    link: "/doctor/profile",
+  }).catch(() => {});
+
+  return { _id: doctor._id, approved: Boolean(approve) };
 };
 
 export const uploadDoctorProfilePhoto = async (doctorId, filename) => {

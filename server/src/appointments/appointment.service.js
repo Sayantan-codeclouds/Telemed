@@ -79,6 +79,31 @@ const DOCTOR_STATUS_TRANSITIONS = {
 // Statuses in which the patient may still cancel or reschedule.
 const PATIENT_CHANGEABLE_STATUSES = ["PENDING", "CONFIRMED", "IN_PROGRESS"];
 
+const DEFAULT_PLATFORM_COMMISSION_PERCENT = 10;
+const toCents = (value) => Math.round(Number(value || 0) * 100) / 100;
+
+/**
+ * Doctor earnings for one completed consultation, using the doctor's current
+ * commission rate. Based on the listed fee (the platform absorbs coupon
+ * discounts; change `grossFee` to `appointment.consultationFee` to make
+ * doctors share them instead).
+ */
+export const buildEarningsSnapshot = (appointment, doctor) => {
+  const commissionPercent =
+    typeof doctor?.platformCommissionPercent === "number" && !Number.isNaN(doctor.platformCommissionPercent)
+      ? doctor.platformCommissionPercent
+      : DEFAULT_PLATFORM_COMMISSION_PERCENT;
+  const grossFee = toCents(appointment.listFee ?? appointment.consultationFee ?? doctor?.consultationFee ?? 0);
+  const platformFee = toCents((grossFee * commissionPercent) / 100);
+  return {
+    grossFee,
+    commissionPercent,
+    platformFee,
+    netAmount: toCents(grossFee - platformFee),
+    recordedAt: new Date(),
+  };
+};
+
 export const createAppointment = async (
   patientId,
   data
@@ -296,6 +321,7 @@ if (existingAppointment) {
     slot: data.slot,
     reason: data.reason,
     consultationFee: finalFee,
+    listFee: fee,
     paymentStatus,
     vrioOrderId,
     vrioResponse,
@@ -578,6 +604,8 @@ export const endConsultationService = async (appointmentId, userId, userType) =>
   }
 
   appointment.status = "COMPLETED";
+  const doctorForEarnings = await Doctor.findById(appointment.doctor).select("platformCommissionPercent consultationFee");
+  appointment.earnings = buildEarningsSnapshot(appointment, doctorForEarnings);
   await appointment.save();
 
   const populated = await appointment.populate([

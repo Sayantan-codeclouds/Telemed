@@ -26,6 +26,12 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 import { getProfileImageUrl } from "@/utils/imageUrl";
 
 const DOCTORS_QUERY_KEY = "admin-doctors";
+
+const CREDENTIAL_LABELS = {
+  licenseNumber: "Licence",
+  qualification: "Qualification",
+  specialization: "Specialization",
+};
 const PAGE_SIZE = 25;
 
 export default function AdminDoctors() {
@@ -207,6 +213,22 @@ export default function AdminDoctors() {
       toast.error(error.response?.data?.message || "Failed to update doctor status.");
     } finally {
       setUpdatingStatusId(null);
+    }
+  };
+
+  const [reviewingCredentialsId, setReviewingCredentialsId] = useState(null);
+
+  // Approve or discard credential changes an approved doctor submitted.
+  const handleReviewCredentials = async (doctor, approve) => {
+    setReviewingCredentialsId(doctor._id);
+    try {
+      const res = await adminApi.patch(`/admin/doctors/${doctor._id}/credentials`, { approve });
+      toast.success(res.data?.message || (approve ? "Changes approved." : "Changes discarded."));
+      refreshDoctors();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to review credential changes.");
+    } finally {
+      setReviewingCredentialsId(null);
     }
   };
 
@@ -451,6 +473,38 @@ export default function AdminDoctors() {
                                 <span className="inline-block mt-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5">
                                   Pending approval: verify license, then switch ON
                                 </span>
+                              )}
+                              {doctor.pendingCredentialChanges && (
+                                <div className="mt-1.5 p-2 rounded-lg bg-amber-50 border border-amber-200 text-[10px] text-amber-900 space-y-1 max-w-xs">
+                                  <p className="font-bold">Credential change to review</p>
+                                  {["licenseNumber", "qualification", "specialization"]
+                                    .filter((field) => doctor.pendingCredentialChanges[field] !== undefined && doctor.pendingCredentialChanges[field] !== null)
+                                    .map((field) => (
+                                      <p key={field}>
+                                        <span className="text-amber-700">{CREDENTIAL_LABELS[field]}:</span>{" "}
+                                        <span className="line-through text-amber-600/70">{doctor[field] || "—"}</span> →{" "}
+                                        <strong>{doctor.pendingCredentialChanges[field] || "—"}</strong>
+                                      </p>
+                                    ))}
+                                  <div className="flex gap-2 pt-0.5">
+                                    <button
+                                      type="button"
+                                      disabled={reviewingCredentialsId === doctor._id}
+                                      onClick={() => handleReviewCredentials(doctor, true)}
+                                      className="font-bold text-emerald-700 hover:underline disabled:opacity-50"
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={reviewingCredentialsId === doctor._id}
+                                      onClick={() => handleReviewCredentials(doctor, false)}
+                                      className="font-bold text-rose-700 hover:underline disabled:opacity-50"
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
+                                </div>
                               )}
                             </div>
                           </div>

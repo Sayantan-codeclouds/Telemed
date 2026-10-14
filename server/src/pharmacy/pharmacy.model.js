@@ -214,6 +214,15 @@ const orderSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Part of totalAmount paid with a gift card (the rest was charged to the card).
+    giftCardCode: {
+      type: String,
+      default: null,
+    },
+    giftCardAmount: {
+      type: Number,
+      default: 0,
+    },
     shippingAddress: {
       line1: { type: String, required: true },
       city: { type: String, required: true },

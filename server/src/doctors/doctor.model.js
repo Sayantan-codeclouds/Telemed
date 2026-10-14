@@ -102,6 +102,8 @@ const doctorSchema = new mongoose.Schema(
     experience: {
       type: Number,
       default: 0,
+      min: 0,
+      max: 80,
     },
 
     licenseNumber: {
@@ -112,6 +114,8 @@ const doctorSchema = new mongoose.Schema(
     consultationFee: {
       type: Number,
       default: 0,
+      min: [0, "Consultation fee can't be negative."],
+      max: [100000, "Consultation fee is too high."],
     },
 
     platformCommissionPercent: {
@@ -263,6 +267,18 @@ const doctorSchema = new mongoose.Schema(
     // ==========================
     // Status
     // ==========================
+
+    // Licence / qualification / specialization changes made by an approved
+    // doctor wait here until an admin approves them (null when none pending).
+    pendingCredentialChanges: {
+      type: {
+        licenseNumber: { type: String },
+        qualification: { type: String },
+        specialization: { type: String },
+        requestedAt: { type: Date },
+      },
+      default: null,
+    },
 
     // Soft delete: the account is deactivated and its records kept. The
     // original email/phone move here so they can be registered again.

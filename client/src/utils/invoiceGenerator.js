@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { makePdfTextSafe } from "./pdfText.js";
 
 /**
  * Generate and download a pharmacy invoice PDF for a given order.
@@ -6,7 +7,8 @@ import { jsPDF } from "jspdf";
  * @param {string} currencySign - e.g. "$"
  */
 export const downloadInvoicePdf = (order, currencySign = "$") => {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  // Text-safe: e.g. "₹" prints as "Rs." instead of garbling the whole line.
+  const doc = makePdfTextSafe(new jsPDF({ unit: "mm", format: "a4" }));
   const W = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   let y = 0;
@@ -183,7 +185,22 @@ export const downloadInvoicePdf = (order, currencySign = "$") => {
   // ─── Items Table Rows ──────────────────────────────────────────────────────
   const items = order.items || [];
   items.forEach((it, idx) => {
-    const rowH = 10;
+    // Long item names wrap inside their column; the row grows to fit.
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    const nameLines = doc.splitTextToSize(
+      String(it.name || (isConsultation ? "Doctor Video Consultation" : "—")),
+      cols.qty - cols.item - 8
+    );
+    const lineH = (doc.getLineHeight() / doc.internal.scaleFactor);
+    const rowH = Math.max(10, 5 + nameLines.length * lineH);
+
+    // page overflow guard (before drawing, so a row never splits across pages)
+    if (y + rowH > pageH - 60) {
+      doc.addPage();
+      y = 20;
+    }
+
     if (idx % 2 === 0) {
       setFill("#f8faff");
       doc.rect(14, y, W - 28, rowH, "F");
@@ -195,7 +212,7 @@ export const downloadInvoicePdf = (order, currencySign = "$") => {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     setTextColor("#0f172a");
-    doc.text(String(it.name || (isConsultation ? "Doctor Video Consultation" : "—")), cols.item + 3, y + 6.5);
+    doc.text(nameLines, cols.item + 3, y + 6.5);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
@@ -208,12 +225,6 @@ export const downloadInvoicePdf = (order, currencySign = "$") => {
     setTextColor(isConsultation ? "#0369a1" : "#1e1b4b");
     doc.text(fmt(it.price * (it.quantity || 1)), cols.total, y + 6.5, { align: "right" });
     y += rowH;
-
-    // page overflow guard
-    if (y > pageH - 60) {
-      doc.addPage();
-      y = 20;
-    }
   });
 
   y += 8;
@@ -224,7 +235,9 @@ export const downloadInvoicePdf = (order, currencySign = "$") => {
 
   const subtotal = items.reduce((s, i) => s + Number(i.price || 0) * Number(i.quantity || 1), 0);
   const discount = Number(order.discountAmount || 0);
-  const total = Number(order.totalAmount || subtotal - discount);
+  const total = Number(order.totalAmount ?? subtotal - discount);
+  const giftCardAmount = Number(order.giftCardAmount || 0);
+  const chargedToCard = Math.max(0, total - giftCardAmount);
 
   const addTotRow = (lbl, val, bold = false, colorHex = "#475569") => {
     doc.setFont("helvetica", bold ? "bold" : "normal");
@@ -245,17 +258,21 @@ export const downloadInvoicePdf = (order, currencySign = "$") => {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   setTextColor("#ffffff");
-  doc.text("TOTAL PAID", totX, y + 6);
+  doc.text("ORDER TOTAL", totX, y + 6);
   doc.text(fmt(total), W - 14, y + 6, { align: "right" });
   y += 18;
 
-  // Card used row
+  // How the total was paid: gift card first, the rest by card.
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  setTextColor("#64748b");
+  if (giftCardAmount > 0) {
+    doc.text(`Paid with gift card${order.giftCardCode ? ` (${order.giftCardCode})` : ""}: ${fmt(giftCardAmount)}`, W - 14, y, { align: "right" });
+    y += 6;
+  }
   if (order.billingDetails?.cardLast4) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    setTextColor("#64748b");
     const cardBrand = (order.billingDetails.cardType || "Card").toUpperCase();
-    doc.text(`Payment: ${cardBrand} ending ••••${order.billingDetails.cardLast4}`, W - 14, y, { align: "right" });
+    doc.text(`Charged to ${cardBrand} ending ••••${order.billingDetails.cardLast4}: ${fmt(chargedToCard)}`, W - 14, y, { align: "right" });
     y += 6;
   }
 

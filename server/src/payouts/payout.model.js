@@ -55,6 +55,11 @@ const payoutSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    // Email of the admin who last changed the status.
+    processedBy: {
+      type: String,
+      default: "",
+    },
     processedAt: {
       type: Date,
       default: null,

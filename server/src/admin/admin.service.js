@@ -1050,7 +1050,11 @@ export const createAdminUserService = async ({
     throw AppError.badRequest("First name, last name, email, and password are required.");
   }
 
-  const normalizedEmail = email.toLowerCase().trim();
+  const normalizedEmail = String(email).toLowerCase().trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    throw AppError.badRequest("Enter a valid email address.");
+  }
+  assertAdminPassword(password);
   const existing = await Admin.findOne({ email: normalizedEmail });
   if (existing) {
     throw AppError.conflict("An administrator with this email address already exists.");
@@ -1074,6 +1078,43 @@ export const createAdminUserService = async ({
   });
 
   return Admin.findById(admin._id).select("-password");
+};
+
+/** Admin accounts guard patient data and money: at least 8 characters. */
+const assertAdminPassword = (password) => {
+  if (typeof password !== "string" || password.length < 8) {
+    throw AppError.badRequest("Admin passwords must be at least 8 characters.");
+  }
+};
+
+/**
+ * SuperAdmin sets a new temporary password for another admin (e.g. a locked-out
+ * colleague). Signs out all their sessions; optionally turns off 2FA when the
+ * admin lost their authenticator.
+ */
+export const resetAdminPasswordService = async (id, { newPassword, resetTwoFactor = false }, currentAdminId) => {
+  if (String(id) === String(currentAdminId)) {
+    throw AppError.badRequest("Use My Profile to change your own password.");
+  }
+  assertAdminPassword(newPassword);
+
+  const admin = await Admin.findById(id);
+  if (!admin) {
+    throw AppError.notFound("Admin user not found.");
+  }
+
+  admin.password = await bcrypt.hash(newPassword, 10);
+  if (resetTwoFactor) {
+    admin.twoFactorEnabled = false;
+    admin.twoFactorSecret = null;
+    admin.twoFactorPendingSecret = null;
+  }
+  admin.tokenVersion = (admin.tokenVersion || 0) + 1;
+  await admin.save();
+
+  return {
+    message: `Password reset for ${admin.email}${resetTwoFactor ? " and two-factor login turned off" : ""}. All their sessions were signed out.`,
+  };
 };
 
 export const updateAdminRoleService = async (id, role, currentAdminId) => {

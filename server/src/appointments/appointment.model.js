@@ -121,9 +121,27 @@ const appointmentSchema = new mongoose.Schema(
     // Payment & Vrio CRM Gateway
     // ==========================
 
+    // Amount the patient paid (after any coupon).
     consultationFee: {
       type: Number,
       default: 0,
+    },
+
+    // Doctor's listed fee at booking, before coupons. Doctor earnings are
+    // based on this: the platform absorbs coupon discounts.
+    listFee: {
+      type: Number,
+      default: null,
+    },
+
+    // Earnings frozen when the consultation is completed, so later commission
+    // changes never rewrite history (and payouts stay consistent).
+    earnings: {
+      grossFee: { type: Number },
+      commissionPercent: { type: Number },
+      platformFee: { type: Number },
+      netAmount: { type: Number },
+      recordedAt: { type: Date },
     },
 
     paymentStatus: {

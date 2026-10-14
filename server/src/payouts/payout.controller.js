@@ -107,7 +107,8 @@ export const updateAdminPayoutStatus = async (req, res) => {
   try {
     const payout = await updatePayoutStatusAdminService(
       req.params.id,
-      req.body
+      req.body,
+      req.admin
     );
     return res.json({
       success: true,

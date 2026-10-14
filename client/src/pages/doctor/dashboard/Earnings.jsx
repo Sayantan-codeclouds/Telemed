@@ -63,6 +63,8 @@ export default function DoctorEarnings() {
     preferredMethod: "BANK_TRANSFER",
   });
   const [savingSettings, setSavingSettings] = useState(false);
+  // Required by the server to change where payouts are sent.
+  const [settingsPassword, setSettingsPassword] = useState("");
 
   const {
     data: { data, payouts } = { data: EMPTY_EARNINGS_DATA, payouts: [] },
@@ -156,7 +158,11 @@ export default function DoctorEarnings() {
     e.preventDefault();
     setSavingSettings(true);
     try {
-      const res = await doctorApi.put("/doctors/payout-settings", settingsForm);
+      const res = await doctorApi.put("/doctors/payout-settings", {
+        ...settingsForm,
+        currentPassword: settingsPassword,
+      });
+      setSettingsPassword("");
       toast.success(res.data?.message || "Payout account settings saved successfully!");
       fetchEarningsData();
     } catch (err) {
@@ -173,25 +179,37 @@ export default function DoctorEarnings() {
       return;
     }
 
-    const headers = ["Date", "Patient Name", "Patient Email", "Gross Fee", "Platform Share (10%)", "Net Earnings", "Status"];
+    // Quote every field, double embedded quotes, and neutralise values a
+    // spreadsheet would run as formulas (patient names are user-entered).
+    const csvField = (value) => {
+      let text = value === null || value === undefined ? "" : String(value);
+      if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+
+    const headers = ["Date", "Patient Name", "Patient Email", "Gross Fee", "Commission %", "Platform Share", "Net Earnings", "Status"];
     const rows = data.consultationLedger.map((item) => [
-      `"${new Date(item.appointmentDate).toLocaleDateString()}"`,
-      `"${item.patient ? `${item.patient.firstName} ${item.patient.lastName}` : "Patient"}"`,
-      `"${item.patient?.email || ""}"`,
+      new Date(item.appointmentDate).toLocaleDateString(),
+      item.patient ? `${item.patient.firstName || ""} ${item.patient.lastName || ""}`.trim() : "Patient",
+      item.patient?.email || "",
       item.grossFee,
+      item.commissionPercent ?? "",
       item.platformFee,
       item.netAmount,
-      `"${item.status}"`,
+      item.status,
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    // A Blob (not a data: URI) so characters like "#" can't truncate the file.
+    const csv = [headers, ...rows].map((row) => row.map(csvField).join(",")).join("\r\n");
+    // Leading BOM so Excel reads the file as UTF-8 (names with accents etc.).
+    const url = URL.createObjectURL(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", url);
     link.setAttribute("download", `TeleClinic_Earnings_Statement_${new Date().toISOString().split("T")[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
     toast.success("Statement exported successfully!");
   };
 
@@ -278,7 +296,7 @@ export default function DoctorEarnings() {
                 {formatPrice(summary.netEarnings)}
               </p>
               <p className="text-xs text-slate-500 mt-1">
-                After {summary.platformCommissionPercent ?? 10}% platform share ({formatPrice(summary.platformFeeTotal)})
+                After platform share ({formatPrice(summary.platformFeeTotal)}) · current rate {summary.platformCommissionPercent ?? 10}%
               </p>
             </div>
           </div>
@@ -440,7 +458,7 @@ export default function DoctorEarnings() {
                   <th className="p-4">Patient</th>
                   <th className="p-4">Consultation Date</th>
                   <th className="p-4 text-right">Gross Fee</th>
-                  <th className="p-4 text-right">Platform Share (10%)</th>
+                  <th className="p-4 text-right">Platform Share</th>
                   <th className="p-4 text-right">Net Take-Home</th>
                   <th className="p-4 text-center">Status</th>
                 </tr>
@@ -502,6 +520,9 @@ export default function DoctorEarnings() {
 
                       <td className="p-4 text-right font-semibold text-rose-600">
                         -{formatPrice(item.platformFee)}
+                        {item.commissionPercent !== undefined && (
+                          <span className="block text-[10px] font-normal text-slate-400">{item.commissionPercent}%</span>
+                        )}
                       </td>
 
                       <td className="p-4 text-right font-black text-emerald-700">
@@ -778,9 +799,28 @@ export default function DoctorEarnings() {
               </div>
             </div>
 
+            <div className="space-y-1.5 max-w-sm">
+              <label htmlFor="payoutSettingsPassword" className="text-xs font-semibold text-slate-700">
+                Current password
+              </label>
+              <Input
+                id="payoutSettingsPassword"
+                type="password"
+                autoComplete="current-password"
+                required
+                placeholder="Confirm it's you"
+                value={settingsPassword}
+                onChange={(e) => setSettingsPassword(e.target.value)}
+                className="h-10 text-xs rounded-xl"
+              />
+              <p className="text-[11px] text-slate-500">
+                For your security, changing payout details needs your password and sends you an alert email.
+              </p>
+            </div>
+
             <Button
               type="submit"
-              disabled={savingSettings}
+              disabled={savingSettings || !settingsPassword}
               className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 px-6 text-xs font-bold shadow-md shadow-emerald-500/20"
             >
               {savingSettings ? (

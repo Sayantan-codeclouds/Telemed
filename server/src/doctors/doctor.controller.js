@@ -170,7 +170,9 @@ export const updateProfile = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Profile updated successfully.",
+      message: doctor.credentialChangePending
+        ? "Profile saved. Your licence/qualification/specialization change will appear once our team reviews it."
+        : "Profile updated successfully.",
       data: doctor,
     });
   } catch (error) {

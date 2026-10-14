@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import doctorApi from "@/api/doctorApi";
+import { toCompactImageDataUrl, escapeXml } from "@/utils/imageData";
 
 export default function SignatureStampModal({
   isOpen,
@@ -121,13 +122,18 @@ export default function SignatureStampModal({
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      return toast.error("Please select an image file (PNG, JPG, or SVG).");
+      return toast.error("Please select an image file (PNG or JPG).");
     }
 
+    // Shrink and convert to PNG/JPEG: kept small for saving, and drawable in PDFs.
     const reader = new FileReader();
-    reader.onload = () => {
-      setSignatureUrl(reader.result);
-      toast.success("Signature image loaded!");
+    reader.onload = async () => {
+      try {
+        setSignatureUrl(await toCompactImageDataUrl(reader.result));
+        toast.success("Signature image loaded!");
+      } catch (err) {
+        toast.error(err.message);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -137,19 +143,24 @@ export default function SignatureStampModal({
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      return toast.error("Please select an image file (PNG, JPG, or SVG).");
+      return toast.error("Please select an image file (PNG or JPG).");
     }
 
+    // Shrink and convert to PNG/JPEG: kept small for saving, and drawable in PDFs.
     const reader = new FileReader();
-    reader.onload = () => {
-      setStampUrl(reader.result);
-      toast.success("Clinic stamp image loaded!");
+    reader.onload = async () => {
+      try {
+        setStampUrl(await toCompactImageDataUrl(reader.result));
+        toast.success("Clinic stamp image loaded!");
+      } catch (err) {
+        toast.error(err.message);
+      }
     };
     reader.readAsDataURL(file);
   };
 
   // Generate Default SVG Stamp for the doctor
-  const handleGenerateDefaultStamp = () => {
+  const handleGenerateDefaultStamp = async () => {
     const doctorName = `DR. ${doctor?.firstName || ""} ${doctor?.lastName || ""}`.trim().toUpperCase();
     const hospital = (doctor?.hospital || "TELECLINIC VIRTUAL HEALTHCARE").toUpperCase();
     const license = (doctor?.licenseNumber || "CERTIFIED PRACTITIONER").toUpperCase();
@@ -162,13 +173,13 @@ export default function SignatureStampModal({
         <path id="curveTop" d="M 30,120 A 90,90 0 0,1 210,120" fill="none" />
         <text font-size="10" font-family="Arial, sans-serif" font-weight="bold" fill="#1e40af" letter-spacing="1">
           <textPath href="#curveTop" startOffset="50%" text-anchor="middle">
-            ${hospital.slice(0, 32)}
+            ${escapeXml(hospital.slice(0, 32))}
           </textPath>
         </text>
         <path id="curveBottom" d="M 210,120 A 90,90 0 0,1 30,120" fill="none" />
         <text font-size="10" font-family="Arial, sans-serif" font-weight="bold" fill="#1e40af" letter-spacing="1">
           <textPath href="#curveBottom" startOffset="50%" text-anchor="middle">
-            REG: ${license.slice(0, 20)}
+            REG: ${escapeXml(license.slice(0, 20))}
           </textPath>
         </text>
         <text x="120" y="108" font-size="16" font-family="Arial, sans-serif" font-weight="900" fill="#1e40af" text-anchor="middle">
@@ -178,14 +189,19 @@ export default function SignatureStampModal({
           SEAL & STAMP
         </text>
         <text x="120" y="142" font-size="9" font-family="Arial, sans-serif" font-weight="bold" fill="#64748b" text-anchor="middle">
-          ★ ${doctorName.slice(0, 24)} ★
+          ★ ${escapeXml(doctorName.slice(0, 24))} ★
         </text>
       </svg>
     `.trim();
 
     const encodedSvg = `data:image/svg+xml;utf8,${encodeURIComponent(svgString)}`;
-    setStampUrl(encodedSvg);
-    toast.success("Standard certified clinic stamp generated!");
+    try {
+      // PDFs can't draw SVG: store the generated stamp as a PNG.
+      setStampUrl(await toCompactImageDataUrl(encodedSvg, { maxWidth: 480, maxHeight: 480 }));
+      toast.success("Standard certified clinic stamp generated!");
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
   // Save Credentials

@@ -146,6 +146,8 @@ export const orderInvoiceEmailTemplate = ({
   const cardType = escapeHtml((billing.cardType || "Visa").toUpperCase());
   const safePatientName = escapeHtml(patientName);
   const discountLabel = escapeHtml(order.discountLabel);
+  const giftCardAmount = Number(order.giftCardAmount || 0);
+  const giftCardCode = escapeHtml(order.giftCardCode);
 
   const itemsRowsHtml = items
     .map(
@@ -301,11 +303,24 @@ export const orderInvoiceEmailTemplate = ({
               </td>
             </tr>
             <tr style="border-top: 1px solid #e2e8f0;">
-              <td style="padding: 12px 0 4px; font-size: 15px; font-weight: 800; color: #0f172a;">Total Paid</td>
+              <td style="padding: 12px 0 4px; font-size: 15px; font-weight: 800; color: #0f172a;">Order Total</td>
               <td style="padding: 12px 0 4px; text-align: right; font-size: 20px; font-weight: 900; color: #4338ca;">
                 ${currencySign}${totalAmount.toFixed(2)}
               </td>
             </tr>
+            ${
+              giftCardAmount > 0
+                ? `
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Paid with gift card ${giftCardCode ? `(${giftCardCode})` : ""}</td>
+              <td style="padding: 6px 0; text-align: right; font-weight: 700;">${currencySign}${giftCardAmount.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Charged to your card</td>
+              <td style="padding: 6px 0; text-align: right; font-weight: 700;">${currencySign}${Math.max(0, totalAmount - giftCardAmount).toFixed(2)}</td>
+            </tr>`
+                : ""
+            }
           </table>
         </div>
 

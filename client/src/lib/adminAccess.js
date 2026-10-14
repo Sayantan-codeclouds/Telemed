@@ -14,6 +14,7 @@ export const ADMIN_PAGE_ROLES = {
   "/admin/appointments": ALL,
   "/admin/profile": ALL,
   "/admin/doctors": MANAGERS,
+  "/admin/payouts": MANAGERS,
   "/admin/pharmacy": MANAGERS,
   "/admin/specializations": MANAGERS,
   "/admin/coupons": MANAGERS,

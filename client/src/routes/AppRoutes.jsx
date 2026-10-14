@@ -71,6 +71,7 @@ const AdminGiftCards = lazy(() => import("../pages/admin/GiftCards"));
 const AdminUsers = lazy(() => import("../pages/admin/AdminUsers"));
 const AdminProfile = lazy(() => import("../pages/admin/Profile"));
 const AdminAuditLog = lazy(() => import("../pages/admin/AuditLog"));
+const AdminPayouts = lazy(() => import("../pages/admin/Payouts"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 
 export default function AppRoutes() {
@@ -350,6 +351,7 @@ export default function AppRoutes() {
           <Route path="appointments" element={<AdminAppointments />} />
           <Route path="pharmacy" element={<AdminPharmacy />} />
           <Route path="orders" element={<AdminOrders />} />
+          <Route path="payouts" element={<AdminPayouts />} />
           <Route path="specializations" element={<AdminSpecializations />} />
           <Route path="coupons" element={<AdminCoupons />} />
           <Route path="gift-cards" element={<AdminGiftCards />} />

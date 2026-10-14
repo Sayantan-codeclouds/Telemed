@@ -539,6 +539,9 @@ export const createOrderService = async (patientId, data) => {
     discountAmount: discountAmount || 0,
     discountCode: discountCode || null,
     discountLabel: discountCode || null,
+    // Plain gift cards only: a GIFT_CARD-type coupon is already in discountAmount.
+    giftCardCode: giftCardReservation?.code || null,
+    giftCardAmount: giftCardReservation?.amount || 0,
     shippingAddress: {
       line1: data.shippingAddress?.line1 || "123 Main Street",
       city: data.shippingAddress?.city || "New York",

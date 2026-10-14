@@ -13,6 +13,7 @@ import {
   Mail,
   Phone,
   RefreshCw,
+  KeyRound,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -95,6 +96,10 @@ export default function AdminUsers() {
       toast.error("Please fill in all required fields.");
       return;
     }
+    if (formData.password.length < 8) {
+      toast.error("Admin passwords must be at least 8 characters.");
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -145,6 +150,39 @@ export default function AdminUsers() {
       toast.error(err.response?.data?.message || "Failed to update user status.");
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  // SuperAdmin: set a temporary password for another admin (locked out / lost 2FA).
+  const [resetTarget, setResetTarget] = useState(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetTwoFactor, setResetTwoFactor] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const openResetPassword = (user) => {
+    setResetTarget(user);
+    setResetPassword("");
+    setResetTwoFactor(false);
+  };
+
+  const submitResetPassword = async (e) => {
+    e.preventDefault();
+    if (resetPassword.length < 8) {
+      toast.error("Use at least 8 characters.");
+      return;
+    }
+    setResetting(true);
+    try {
+      const res = await adminApi.patch(`/admin/users/${resetTarget._id}/password`, {
+        newPassword: resetPassword,
+        resetTwoFactor,
+      });
+      toast.success(res.data?.message || "Password reset.");
+      setResetTarget(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to reset password.");
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -431,6 +469,18 @@ export default function AdminUsers() {
                             variant="ghost"
                             size="sm"
                             disabled={isUpdating}
+                            onClick={() => openResetPassword(user)}
+                            className="h-8 w-8 p-0 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl"
+                            title="Reset password"
+                          >
+                            <KeyRound className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {isSuperAdmin && !isSelf && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={isUpdating}
                             onClick={() => handleDeleteUser(user)}
                             className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl"
                             title="Remove admin team member"
@@ -534,6 +584,7 @@ export default function AdminUsers() {
                 <Input
                   type="password"
                   name="password"
+                  minLength={8}
                   value={formData.password}
                   onChange={handleInputChange}
                   placeholder="Minimum 6 characters"
@@ -639,6 +690,40 @@ export default function AdminUsers() {
               </div>
             </form>
           </Card>
+        </div>
+      )}
+      {resetTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+          <form onSubmit={submitResetPassword} className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 space-y-4">
+            <h3 className="text-base font-bold text-slate-900">
+              Reset password for {resetTarget.firstName} {resetTarget.lastName}
+            </h3>
+            <p className="text-xs text-slate-500">
+              Set a temporary password and share it with them securely; they should change it in My Profile. All their
+              current sessions are signed out.
+            </p>
+            <Input
+              type="text"
+              autoFocus
+              minLength={8}
+              value={resetPassword}
+              onChange={(e) => setResetPassword(e.target.value)}
+              placeholder="New temporary password (min 8 characters)"
+              className="rounded-xl font-mono"
+            />
+            <label className="flex items-center gap-2 text-xs text-slate-700">
+              <input type="checkbox" checked={resetTwoFactor} onChange={(e) => setResetTwoFactor(e.target.checked)} />
+              Also turn off two-factor login (they lost their authenticator)
+            </label>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setResetTarget(null)} className="rounded-xl">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={resetting || resetPassword.length < 8} className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white">
+                {resetting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Reset password"}
+              </Button>
+            </div>
+          </form>
         </div>
       )}
     </div>

@@ -94,13 +94,14 @@ export default function EditDoctorProfileDrawer({
       lastName: doctor.lastName || "",
       email: doctor.email || "",
       phone: doctor.phone || "",
-      specialization: doctor.specialization || "General Physician",
+      specialization: doctor.specialization || "",
       hospital: doctor.hospital || "",
       experience: doctor.experience || "",
       qualification: doctor.qualification || "",
-      registrationNumber: doctor.registrationNumber || "",
-      consultationFee: doctor.consultationFee || 500,
-      bio: doctor.bio || "",
+      // The API names these licenseNumber / biography.
+      registrationNumber: doctor.licenseNumber || "",
+      consultationFee: doctor.consultationFee ?? 500,
+      bio: doctor.biography || "",
       line1: doctor.address?.line1 || "",
       line2: doctor.address?.line2 || "",
       city: doctor.address?.city || "",
@@ -135,9 +136,10 @@ export default function EditDoctorProfileDrawer({
       hospital: data.hospital,
       experience: Number(data.experience) || 0,
       qualification: data.qualification,
-      registrationNumber: data.registrationNumber,
-      consultationFee: Number(data.consultationFee) || 500,
-      bio: data.bio,
+      licenseNumber: data.registrationNumber,
+      // 0 is a valid (free) fee; only an empty field falls back to the default.
+      consultationFee: data.consultationFee === "" || data.consultationFee === undefined ? 500 : Number(data.consultationFee),
+      biography: data.bio,
       address: {
         line1: data.line1 || "",
         line2: data.line2 || "",
@@ -149,8 +151,9 @@ export default function EditDoctorProfileDrawer({
     };
 
     try {
-      await doctorApi.put("/doctors/profile", payload);
-      toast.success("Doctor profile updated successfully!");
+      const res = await doctorApi.put("/doctors/profile", payload);
+      // The server explains when licence/qualification/specialization changes await review.
+      toast.success(res.data?.message || "Doctor profile updated successfully!");
       if (onUpdated) onUpdated();
       setOpen(false);
     } catch (error) {

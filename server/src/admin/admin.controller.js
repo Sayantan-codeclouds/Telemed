@@ -25,6 +25,7 @@ import {
   updateAdminProfileService,
   uploadAdminProfilePhotoService,
   changeAdminPasswordService,
+  resetAdminPasswordService,
   startTwoFactorSetupService,
   enableTwoFactorService,
   disableTwoFactorService,
@@ -48,6 +49,7 @@ import {
 } from "../pharmacy/vrio.service.js";
 import { sendTestEmailService } from "../mail/mail.service.js";
 import { recordAdminAction } from "../shared/middleware/adminAudit.js";
+import { reviewDoctorCredentialChangesService } from "../doctors/doctor.service.js";
 import AuditLog from "./auditLog.model.js";
 import { parseListQuery } from "./adminList.js";
 import {
@@ -195,6 +197,16 @@ export const updateDoctorCommission = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: `Commission rate for Dr. ${result.firstName} ${result.lastName} updated to ${result.platformCommissionPercent}% (${result.doctorPayoutPercent}% payout).`,
+    data: result,
+  });
+});
+
+export const reviewDoctorCredentials = asyncHandler(async (req, res) => {
+  const approve = req.body?.approve === true;
+  const result = await reviewDoctorCredentialChangesService(req.params.id, approve);
+  res.status(200).json({
+    success: true,
+    message: approve ? "Credential changes approved and published." : "Credential changes discarded.",
     data: result,
   });
 });
@@ -521,6 +533,15 @@ export const createAdminUser = asyncHandler(async (req, res) => {
     message: "Admin team member created successfully.",
     data: user,
   });
+});
+
+export const resetAdminUserPassword = asyncHandler(async (req, res) => {
+  const result = await resetAdminPasswordService(
+    req.params.id,
+    { newPassword: req.body?.newPassword, resetTwoFactor: req.body?.resetTwoFactor === true },
+    req.admin._id
+  );
+  res.status(200).json({ success: true, message: result.message });
 });
 
 export const updateAdminUserRole = asyncHandler(async (req, res) => {

@@ -134,6 +134,13 @@ export default function DoctorProfile() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-16">
+      {doctor.pendingCredentialChanges && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>Credential update under review.</strong> Your new licence / qualification / specialization will
+          appear on your public profile once our team approves it.
+        </div>
+      )}
+
       {/* Executive Hero Banner */}
       <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-white p-8 sm:p-10 border border-slate-800 shadow-xl shadow-slate-950/20">
         <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />

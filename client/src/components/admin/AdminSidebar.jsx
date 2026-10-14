@@ -18,6 +18,7 @@ import {
   User,
   Settings,
   History,
+  Wallet,
 } from "lucide-react";
 import { ADMIN_PAGE_ROLES, getCurrentAdminRole } from "@/lib/adminAccess";
 
@@ -51,6 +52,12 @@ const allNavItems = [
     path: "/admin/appointments",
     icon: Calendar,
     roles: ADMIN_PAGE_ROLES["/admin/appointments"],
+  },
+  {
+    label: "Payouts",
+    path: "/admin/payouts",
+    icon: Wallet,
+    roles: ADMIN_PAGE_ROLES["/admin/payouts"],
   },
   {
     label: "Doctors",
