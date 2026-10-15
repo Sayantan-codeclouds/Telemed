@@ -77,6 +77,18 @@ check("negative stock rejected", (await call("PUT", `/admin/pharmacy/medicines/$
 await call("PUT", `/admin/pharmacy/medicines/${zinc._id}`, { token: adminTok, body: { stockQuantity: 0 } });
 check("setting quantity to 0 marks it out of stock", (await Medicine.findById(zinc._id)).inStock === false);
 
+// ---- default availability for admin-created doctors ----
+r = await call("POST", "/admin/doctors", { token: adminTok, body: { firstName: "New", lastName: "Doctor", email: "newdoc@x.test", phone: "555", password: "DoctorPass1", hospital: "City Clinic" } });
+const created = await Doctor.findOne({ email: "newdoc@x.test" });
+const monday = created?.availability.find((d) => d.day === "Monday");
+const expectedSlots = ["09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "17:00-18:00", "18:00-19:00", "19:00-20:00"];
+check("admin-created doctor gets one-hour default slots", r.status === 201 && JSON.stringify(monday?.slots.map((s) => `${s.start}-${s.end}`)) === JSON.stringify(expectedSlots), JSON.stringify(monday?.slots));
+check("default covers Monday to Friday only", created.availability.length === 5 && !created.availability.some((d) => ["Saturday", "Sunday"].includes(d.day)));
+const nextMonday = new Date();
+nextMonday.setUTCDate(nextMonday.getUTCDate() + ((8 - nextMonday.getUTCDay()) % 7 || 7));
+const free = (await call("GET", `/doctors/${created._id}/available-slots?date=${nextMonday.toISOString().slice(0, 10)}`)).json?.data || [];
+check("all 7 hourly slots are offered for booking", free.length === 7, JSON.stringify(free));
+
 server.close();
 await mongoose.disconnect();
 await mongod.stop();

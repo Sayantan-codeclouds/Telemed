@@ -420,19 +420,18 @@ export const createDoctorService = async (data) => {
   const credentials = resolveInitialCredentials(password);
 
   // Standard initial availability: Monday to Friday
-  const defaultAvailability = [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-  ].map((day) => ({
+  // Monday-Friday, 09:00-13:00 and 17:00-20:00 in one-hour slots. Each slot
+  // is one bookable appointment, so the doctor can see 7 patients a day until
+  // they set their own hours.
+  const hourlySlots = (fromHour, toHour) =>
+    Array.from({ length: toHour - fromHour }, (_, i) => ({
+      start: `${String(fromHour + i).padStart(2, "0")}:00`,
+      end: `${String(fromHour + i + 1).padStart(2, "0")}:00`,
+    }));
+  const defaultAvailability = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].map((day) => ({
     day,
     enabled: true,
-    slots: [
-      { start: "09:00", end: "13:00" },
-      { start: "17:00", end: "20:00" },
-    ],
+    slots: [...hourlySlots(9, 13), ...hourlySlots(17, 20)],
   }));
 
   const doctor = new Doctor({
