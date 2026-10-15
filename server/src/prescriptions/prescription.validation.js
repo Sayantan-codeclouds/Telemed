@@ -14,7 +14,12 @@ export const createPrescriptionSchema = z.object({
   medicines: z.array(medicineItemSchema).min(1, "At least one medicine is required."),
   notes: z.string().trim().optional().default(""),
   followUpDate: z.string().optional().nullable(),
-  validityDays: z.number().or(z.string().regex(/^\d+$/).transform(Number)).optional().nullable(),
+  validityDays: z
+    .number()
+    .or(z.string().regex(/^\d+$/).transform(Number))
+    .pipe(z.number().int().min(1, "Validity must be at least 1 day.").max(365, "Validity can't exceed 365 days."))
+    .optional()
+    .nullable(),
   validUntil: z.string().optional().nullable(),
   remindRecheckup: z.boolean().optional().default(true),
   recheckupDate: z.string().optional().nullable(),

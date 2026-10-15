@@ -15,6 +15,13 @@ export const createPrescriptionService = async (doctorId, data) => {
     throw AppError.forbidden("You are not the assigned doctor for this appointment.");
   }
 
+  // Prescriptions unlock prescription-only medicines: only for a real visit.
+  if (!["CONFIRMED", "IN_PROGRESS", "COMPLETED"].includes(appointment.status)) {
+    throw AppError.badRequest(
+      `A prescription can't be issued for an appointment that is ${appointment.status.replace("_", " ").toLowerCase()}.`
+    );
+  }
+
   const doctor = await Doctor.findById(doctorId);
 
   // Determine validity days & dates

@@ -363,6 +363,27 @@ export const updateDoctorAvailability = async (doctorId, availability) => {
     }
   }
 
+  // Each day once, and no overlapping slots (overlaps could be booked twice).
+  const seenDays = new Set();
+  for (const item of availability || []) {
+    if (!validDays.includes(item.day)) continue;
+    if (seenDays.has(item.day)) {
+      throw new Error(`${item.day} is listed more than once. Combine its time slots into one day.`);
+    }
+    seenDays.add(item.day);
+    const slots = (item.slots || [])
+      .filter((s) => s.start && s.end)
+      .map((s) => ({ start: s.start.trim(), end: s.end.trim() }))
+      .sort((a, b) => a.start.localeCompare(b.start));
+    for (let i = 1; i < slots.length; i++) {
+      if (slots[i].start < slots[i - 1].end) {
+        throw new Error(
+          `Slots on ${item.day} overlap (${slots[i - 1].start}-${slots[i - 1].end} and ${slots[i].start}-${slots[i].end}). Each slot is one bookable appointment, so they must not overlap.`
+        );
+      }
+    }
+  }
+
   const sanitized = (availability || [])
     .filter((item) => validDays.includes(item.day))
     .map((item) => ({

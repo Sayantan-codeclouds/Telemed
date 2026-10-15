@@ -51,6 +51,7 @@ const medicineSchema = new mongoose.Schema(
     stockQuantity: {
       type: Number,
       default: 100,
+      min: [0, "Stock quantity can't be negative."],
     },
     description: {
       type: String,

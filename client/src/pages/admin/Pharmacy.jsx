@@ -116,7 +116,8 @@ export default function AdminPharmacy() {
       dosageForm: med.dosageForm || "Tablet",
       strength: med.strength || "",
       price: med.price || "",
-      stockQuantity: med.stockQuantity || 100,
+      // Keep a real 0 (sold out): "|| 100" silently restocked on save.
+      stockQuantity: med.stockQuantity ?? 100,
       inStock: med.inStock !== false,
       requiresPrescription: Boolean(med.requiresPrescription),
       description: med.description || "",
@@ -417,6 +418,9 @@ export default function AdminPharmacy() {
                           )}
                           <span>{med.inStock ? "IN STOCK" : "OUT OF STOCK"}</span>
                         </button>
+                        <p className={`text-[10px] mt-1 ${med.stockQuantity > 0 ? "text-slate-400" : "text-rose-500 font-semibold"}`}>
+                          {med.stockQuantity ?? 0} unit{med.stockQuantity === 1 ? "" : "s"} left
+                        </p>
                       </td>
 
                       <td className="p-4 text-right">

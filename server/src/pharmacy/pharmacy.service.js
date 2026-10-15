@@ -701,6 +701,11 @@ export const getAllOrdersAdminService = async () => {
 };
 
 export const createMedicineService = async (data) => {
+  // 0 is a real quantity (sold out); only a missing value defaults to 100.
+  const initialStock =
+    data.stockQuantity === undefined || data.stockQuantity === null || data.stockQuantity === ""
+      ? 100
+      : Number(data.stockQuantity);
   const campaignId = data.campaignId !== undefined ? Number(data.campaignId) : 1;
   const prepaidCampaignId = data.prepaidCampaignId ? Number(data.prepaidCampaignId) : null;
   const itemId = data.itemId !== undefined ? Number(data.itemId) : (data.vrioProductId ? Number(data.vrioProductId) : 1);
@@ -714,8 +719,8 @@ export const createMedicineService = async (data) => {
     strength: data.strength || "",
     price: Number(data.price),
     requiresPrescription: Boolean(data.requiresPrescription),
-    inStock: data.inStock !== undefined ? Boolean(data.inStock) : true,
-    stockQuantity: data.stockQuantity ? Number(data.stockQuantity) : 100,
+    inStock: (data.inStock !== undefined ? Boolean(data.inStock) : true) && initialStock > 0,
+    stockQuantity: initialStock,
     description: data.description || "",
     manufacturer: data.manufacturer || "TeleClinic Pharma",
     campaignId,
@@ -743,6 +748,8 @@ export const updateMedicineService = async (id, data) => {
   if (data.requiresPrescription !== undefined) medicine.requiresPrescription = Boolean(data.requiresPrescription);
   if (data.inStock !== undefined) medicine.inStock = Boolean(data.inStock);
   if (data.stockQuantity !== undefined) medicine.stockQuantity = Number(data.stockQuantity);
+  // Nothing left to sell can't be shown as in stock (checkout reserves real units).
+  if (medicine.stockQuantity <= 0) medicine.inStock = false;
   if (data.description !== undefined) medicine.description = data.description;
   if (data.manufacturer !== undefined) medicine.manufacturer = data.manufacturer;
 
@@ -777,15 +784,18 @@ export const toggleMedicineStockService = async (id, inStock, stockQuantity) => 
   const medicine = await Medicine.findById(id);
   if (!medicine) throw AppError.notFound("Medicine not found.");
 
-  if (inStock !== undefined) {
-    medicine.inStock = Boolean(inStock);
-  } else {
-    medicine.inStock = !medicine.inStock;
-  }
-
   if (stockQuantity !== undefined) {
     medicine.stockQuantity = Number(stockQuantity);
   }
+
+  const wantInStock = inStock !== undefined ? Boolean(inStock) : !medicine.inStock;
+  // Checkout reserves real units, so "in stock" needs a positive quantity.
+  if (wantInStock && !(medicine.stockQuantity > 0)) {
+    throw AppError.badRequest(
+      `${medicine.name} has no units left. Edit the medicine and set a stock quantity first.`
+    );
+  }
+  medicine.inStock = wantInStock;
 
   await medicine.save();
   return medicine;

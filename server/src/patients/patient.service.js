@@ -296,7 +296,13 @@ export const uploadPatientProfilePhoto = async (patientId, file) => {
 };
 
 export const changePatientPassword = async (patientId, currentPassword, newPassword) => {
-  const patient = await Patient.findById(patientId);
+  if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
+    throw new Error("Both current and new passwords are required.");
+  }
+
+  // The password field is excluded by default (select: false) and must be
+  // requested explicitly, otherwise the comparison can never succeed.
+  const patient = await Patient.findById(patientId).select("+password");
   if (!patient) throw new Error("Patient not found.");
 
   const isMatch = await bcrypt.compare(currentPassword, patient.password);
