@@ -78,6 +78,32 @@ check("profile update without history keeps allergies/conditions", r.status === 
 await call("PUT", "/patients/profile", { token: patTok, body: { firstName: "Pat", lastName: "One", phone: "9000000001", allergies: ["Penicillin", "  Latex  ", ""] } });
 check("sent lists replace history (trimmed, blanks dropped)", (await Patient.findOne({ email: "p@x.test" })).allergies.join("|") === "Penicillin|Latex");
 
+// ---- partial profile updates keep everything not sent ----
+await Patient.updateOne(
+  { email: "p@x.test" },
+  { gender: "Female", bloodGroup: "B+", height: { value: 160, unit: "cm" }, address: { line1: "1 Main St", city: "Pune", country: "India" }, emergencyContact: { name: "Asha", relationship: "Sister", phone: "123" } }
+);
+r = await call("PUT", "/patients/profile", { token: patTok, body: { phone: "9000000009" } });
+let saved = await Patient.findOne({ email: "p@x.test" });
+check(
+  "phone-only update keeps name, gender, blood group, height, address, contact",
+  r.status === 200 && saved.phone === "9000000009" && saved.firstName === "Pat" && saved.gender === "Female" && saved.bloodGroup === "B+" &&
+    saved.height?.value === 160 && saved.address?.city === "Pune" && saved.emergencyContact?.name === "Asha",
+  JSON.stringify(r.json?.message || "")
+);
+await call("PUT", "/patients/profile", { token: patTok, body: { address: { city: "Mumbai" } } });
+saved = await Patient.findOne({ email: "p@x.test" });
+check("partial address update merges (other address lines kept)", saved.address.city === "Mumbai" && saved.address.line1 === "1 Main St");
+r = await call("PUT", "/patients/profile", { token: patTok, body: { gender: "", bloodGroup: null } });
+saved = await Patient.findOne({ email: "p@x.test" });
+check("empty gender / blood group clears them (no enum error)", r.status === 200 && saved.gender === null && saved.bloodGroup === null, JSON.stringify(r.json?.message || ""));
+r = await call("PUT", "/patients/profile", {
+  token: patTok,
+  body: { firstName: "Pat", lastName: "One", phone: "9000000009", gender: "Male", bloodGroup: "O-", dateOfBirth: null, height: { value: null, unit: "cm" }, weight: { value: 70, unit: "kg" }, address: { line1: "", line2: "", city: "", state: "", country: "", pincode: "" }, emergencyContact: { name: "", relationship: "", phone: "" }, medicalConditions: [], allergies: [], currentMedications: [], pastSurgeries: [] },
+});
+saved = await Patient.findOne({ email: "p@x.test" });
+check("full form save (as the app sends it) still replaces everything", r.status === 200 && saved.bloodGroup === "O-" && saved.weight.value === 70 && saved.address.city === "" && saved.allergies.length === 0);
+
 server.close();
 await mongoose.disconnect();
 await mongod.stop();

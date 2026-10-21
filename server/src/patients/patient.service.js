@@ -211,42 +211,43 @@ export const updatePatientProfile = async (patientId, profileData) => {
     throw new Error("Patient not found.");
   }
 
+  // Only fields present in the request are changed; anything omitted keeps
+  // its current value. Empty gender / blood group means "not specified".
+  const has = (field) => profileData[field] !== undefined;
+
   // Basic Information
-  patient.firstName = profileData.firstName;
-  patient.lastName = profileData.lastName;
-  patient.phone = profileData.phone;
-  patient.gender = profileData.gender;
-  patient.dateOfBirth = profileData.dateOfBirth || null;
-  patient.bloodGroup = profileData.bloodGroup;
+  for (const field of ["firstName", "lastName", "phone"]) {
+    if (has(field)) patient[field] = typeof profileData[field] === "string" ? profileData[field].trim() : profileData[field];
+  }
+  if (has("gender")) patient.gender = profileData.gender || null;
+  if (has("bloodGroup")) patient.bloodGroup = profileData.bloodGroup || null;
+  if (has("dateOfBirth")) patient.dateOfBirth = profileData.dateOfBirth || null;
 
-  // Height
-  patient.height = {
-    value: profileData.height?.value || null,
-    unit: profileData.height?.unit || "cm",
-  };
+  // Height / Weight
+  if (has("height")) {
+    patient.height = {
+      value: profileData.height?.value || null,
+      unit: profileData.height?.unit || patient.height?.unit || "cm",
+    };
+  }
+  if (has("weight")) {
+    patient.weight = {
+      value: profileData.weight?.value || null,
+      unit: profileData.weight?.unit || patient.weight?.unit || "kg",
+    };
+  }
 
-  // Weight
-  patient.weight = {
-    value: profileData.weight?.value || null,
-    unit: profileData.weight?.unit || "kg",
-  };
-
-  // Address
-  patient.address = {
-    line1: profileData.address?.line1 || "",
-    line2: profileData.address?.line2 || "",
-    city: profileData.address?.city || "",
-    state: profileData.address?.state || "",
-    country: profileData.address?.country || "",
-    pincode: profileData.address?.pincode || "",
-  };
-
-  // Emergency Contact
-  patient.emergencyContact = {
-    name: profileData.emergencyContact?.name || "",
-    relationship: profileData.emergencyContact?.relationship || "",
-    phone: profileData.emergencyContact?.phone || "",
-  };
+  // Address / Emergency contact: sent sub-fields replace, omitted ones are kept.
+  const mergeSubfields = (current, incoming, keys) =>
+    Object.fromEntries(
+      keys.map((key) => [key, incoming?.[key] !== undefined ? String(incoming[key] ?? "").trim() : current?.[key] || ""])
+    );
+  if (has("address")) {
+    patient.address = mergeSubfields(patient.address, profileData.address, ["line1", "line2", "city", "state", "country", "pincode"]);
+  }
+  if (has("emergencyContact")) {
+    patient.emergencyContact = mergeSubfields(patient.emergencyContact, profileData.emergencyContact, ["name", "relationship", "phone"]);
+  }
 
   // Medical history is only replaced when sent: an omitted list must never
   // wipe a patient's allergies or conditions.

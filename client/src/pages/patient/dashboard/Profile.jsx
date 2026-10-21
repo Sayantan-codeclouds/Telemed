@@ -193,7 +193,7 @@ export default function Profile() {
                 Blood Group
               </span>
               <p className="text-2xl font-black text-rose-600 mt-0.5">
-                {patient.bloodGroup || "O+"}
+                {patient.bloodGroup || "Not set"}
               </p>
               <span className="text-[10px] text-slate-400 font-medium">ABO / Rh Type</span>
             </div>
@@ -299,7 +299,7 @@ export default function Profile() {
                   Gender
                 </span>
                 <p className="text-slate-900 font-bold text-sm mt-0.5">
-                  {patient.gender || "Male"}
+                  {patient.gender || "Not set"}
                 </p>
               </div>
             </div>

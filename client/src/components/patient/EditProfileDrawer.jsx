@@ -236,8 +236,9 @@ export default function EditProfileDrawer({
     lastName: "",
     email: "",
     phone: "",
-    gender: "Male",
-    bloodGroup: "O+",
+    // Never pre-fill medical facts: unknown stays empty.
+    gender: "",
+    bloodGroup: "",
     dateOfBirth: "",
     heightValue: "",
     heightUnit: "cm",
@@ -280,8 +281,8 @@ export default function EditProfileDrawer({
       lastName: patient.lastName || "",
       email: patient.email || "",
       phone: patient.phone || "",
-      gender: patient.gender || "Male",
-      bloodGroup: patient.bloodGroup || "O+",
+      gender: patient.gender || "",
+      bloodGroup: patient.bloodGroup || "",
       dateOfBirth: patient.dateOfBirth ? patient.dateOfBirth.substring(0, 10) : "",
       heightValue: patient.height?.value ? String(patient.height.value) : "",
       heightUnit: patient.height?.unit || "cm",
@@ -389,8 +390,8 @@ export default function EditProfileDrawer({
       firstName: formData.firstName.trim(),
       lastName: formData.lastName.trim(),
       phone: formData.phone.trim(),
-      gender: formData.gender,
-      bloodGroup: formData.bloodGroup,
+      gender: formData.gender || null,
+      bloodGroup: formData.bloodGroup || null,
       dateOfBirth: formData.dateOfBirth || null,
       height: {
         value: formData.heightValue ? Number(formData.heightValue) : null,
@@ -683,7 +684,8 @@ export default function EditProfileDrawer({
                       <button
                         key={g}
                         type="button"
-                        onClick={() => handleChange("gender", g)}
+                        // Clicking the selected option again clears it.
+                        onClick={() => handleChange("gender", formData.gender === g ? "" : g)}
                         className={`flex items-center justify-center gap-2 py-3 rounded-2xl text-xs font-bold border transition cursor-pointer ${
                           formData.gender === g
                             ? "bg-blue-50 border-blue-400 text-blue-800 shadow-2xs"
@@ -711,7 +713,7 @@ export default function EditProfileDrawer({
                     Select Blood Group (ABO / Rh)
                   </Label>
                   <Badge className="bg-rose-50 text-rose-700 border-rose-200 text-xs font-bold">
-                    Selected: {formData.bloodGroup}
+                    Selected: {formData.bloodGroup || "Not set"}
                   </Badge>
                 </div>
 
@@ -720,7 +722,7 @@ export default function EditProfileDrawer({
                     <button
                       key={bg}
                       type="button"
-                      onClick={() => handleChange("bloodGroup", bg)}
+                      onClick={() => handleChange("bloodGroup", formData.bloodGroup === bg ? "" : bg)}
                       className={`flex flex-col items-center justify-center py-3 rounded-2xl text-xs font-black transition cursor-pointer border ${
                         formData.bloodGroup === bg
                           ? "bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-200"
