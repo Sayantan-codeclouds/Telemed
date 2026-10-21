@@ -559,13 +559,13 @@ export const sendSupportTicketResolvedEmail = async ({
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:25px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;">
         <div style="background:#065f46;padding:20px;border-radius:8px;text-align:center;color:#ffffff;">
           <h2 style="margin:0;font-size:22px;">✓ Support Ticket Solved</h2>
-          <p style="margin:5px 0 0;font-size:13px;color:#a7f3d0;">Ticket #${ticketId}</p>
+          <p style="margin:5px 0 0;font-size:13px;color:#a7f3d0;">Ticket #${escapeHtml(ticketId)}</p>
         </div>
 
         <div style="padding:20px 5px;color:#1e293b;">
-          <p style="font-size:15px;">Hello <b>${name || "Valued User"}</b>,</p>
+          <p style="font-size:15px;">Hello <b>${escapeHtml(name) || "Valued User"}</b>,</p>
           <p style="font-size:14px;line-height:1.6;color:#475569;">
-            Your support request regarding "<b>${subject}</b>" has been marked as <b>SOLVED</b> by our team.
+            Your support request regarding "<b>${escapeHtml(subject)}</b>" has been marked as <b>SOLVED</b> by our team.
           </p>
 
           ${
@@ -573,7 +573,7 @@ export const sendSupportTicketResolvedEmail = async ({
               ? `
             <div style="background:#ecfdf5;padding:16px;border-radius:8px;border-left:4px solid #059669;margin:20px 0;">
               <p style="margin:0 0 6px;font-size:12px;color:#047857;text-transform:uppercase;font-weight:bold;">Admin Resolution Response:</p>
-              <p style="margin:0;font-size:14px;color:#064e3b;line-height:1.5;white-space:pre-line;">${adminResponse}</p>
+              <p style="margin:0;font-size:14px;color:#064e3b;line-height:1.5;white-space:pre-line;">${escapeHtml(adminResponse)}</p>
             </div>
           `
               : ""

@@ -193,8 +193,15 @@ export const updateSpecializationService = async (id, data) => {
     if (existing) {
       throw new Error(`Another specialization named "${data.name.trim()}" already exists.`);
     }
+    const previousName = item.name;
     item.name = data.name.trim();
     item.slug = item.name.toLowerCase().replace(/\s+/g, "-").replace(/[^\w-]+/g, "");
+    // Doctors store the specialization by name: move them to the new name so
+    // they still appear under it (search filters, delete checks).
+    await Doctor.updateMany(
+      { specialization: { $regex: new RegExp(`^${escapeRegex(previousName)}$`, "i") } },
+      { $set: { specialization: item.name } }
+    );
   }
 
   if (data.description !== undefined) item.description = data.description.trim();

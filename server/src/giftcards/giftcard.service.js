@@ -166,7 +166,13 @@ export const createGiftCardService = async (data) => {
     }
   } catch (err) {
     console.warn("[GiftCard Service] Vrio create call failed:", err.message);
-    // If not able to reach Vrio or in test environment, still register local record
+    // With the CRM live, a card it doesn't know about can't be redeemed at
+    // checkout: fail loudly instead of creating a local-only card. (With the
+    // CRM disabled / offline, local cards are the intended behaviour.)
+    const settings = await getCrmSettingsService().catch(() => null);
+    if (settings?.isEnabled && (settings.crmProvider || "vrio") === "vrio") {
+      throw new AppError(`Gift card was not created: Vrio rejected the request (${err.message}).`, 502);
+    }
   }
 
   const giftCard = await GiftCard.create({

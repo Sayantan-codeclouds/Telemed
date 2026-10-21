@@ -248,10 +248,13 @@ export const updatePatientProfile = async (patientId, profileData) => {
     phone: profileData.emergencyContact?.phone || "",
   };
 
-  patient.medicalConditions = profileData.medicalConditions || [];
-  patient.allergies = profileData.allergies || [];
-  patient.currentMedications = profileData.currentMedications || [];
-  patient.pastSurgeries = profileData.pastSurgeries || [];
+  // Medical history is only replaced when sent: an omitted list must never
+  // wipe a patient's allergies or conditions.
+  for (const field of ["medicalConditions", "allergies", "currentMedications", "pastSurgeries"]) {
+    if (Array.isArray(profileData[field])) {
+      patient[field] = profileData[field].filter((item) => typeof item === "string").map((item) => item.trim()).filter(Boolean);
+    }
+  }
 
   await patient.save();
 
